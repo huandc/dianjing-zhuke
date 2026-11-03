@@ -251,6 +251,32 @@ check('快照带目录当前/下一节', st5.catalogCur === '2.1' && st5.catalog
 check('快照带待听内容', /2\.2/.test(String(st5.nextText)), st5.nextText);
 check('快照带视频源', /a\.mp4/.test(String(st5.videoSrc)), st5.videoSrc);
 
+/* ---------- [13] 强制倍速：页面世界 rate-lock.js ----------
+ * 单独开一个干净的 jsdom：主用例里 content.js 自己也包了一层
+ * playbackRate，双层包装会让「底层速率」断言失真。
+ */
+const rlDom = new JSDOM('<!doctype html><body><video id="rv" src="https://res.zfwx.com/a.mp4"></video></body>', { runScripts: 'outside-only' });
+const rlWin = rlDom.window;
+const rlNative = Object.getOwnPropertyDescriptor(rlWin.HTMLMediaElement.prototype, 'playbackRate');
+const rlVideo = rlWin.document.getElementById('rv');
+
+rlWin.eval(fs.readFileSync(path.join(ROOT, 'src/rate-lock.js'), 'utf8'));
+const rateMain = rlWin.__DJZK_RATE_MAIN__;
+check('页面世界脚本接管 playbackRate', !!rateMain && typeof rateMain === 'object');
+
+rlWin.postMessage({ __djzk_rate: 1, rate: 2.5, on: true }, '*');
+await sleep(30);
+check('强制倍速已生效', rateMain.on === true && rateMain.rate === 2.5, JSON.stringify({ on: rateMain.on, rate: rateMain.rate }));
+
+rlVideo.playbackRate = 1;
+check('页面改写 1× 被压回 2.5×', Math.abs(rlVideo.playbackRate - 2.5) < 0.01, String(rlVideo.playbackRate));
+check('底层真实速率也被改写', Math.abs(rlNative.get.call(rlVideo) - 2.5) < 0.01, String(rlNative.get.call(rlVideo)));
+
+rlWin.postMessage({ __djzk_rate: 1, rate: 2.5, on: false }, '*');
+await sleep(30);
+rlVideo.playbackRate = 1.25;
+check('关闭强制后可自由改倍速', Math.abs(rlVideo.playbackRate - 1.25) < 0.01, String(rlVideo.playbackRate));
+
 const failed = results.filter((r) => !r.ok);
 console.log('\n' + (failed.length ? `❌ ${failed.length}/${results.length} 项失败` : `✅ 全部 ${results.length} 项通过`));
 process.exit(failed.length ? 1 : 0);

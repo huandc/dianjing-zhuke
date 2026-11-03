@@ -9,7 +9,7 @@ const DEFAULTS = {
   autoNext: true,
   autoMute: true,
   rate: 1.5,
-  forceRate: false,
+  forceRate: true,
   endThreshold: 1.5,
   nextDelayMinMs: 4000,
   nextDelayMaxMs: 6000,

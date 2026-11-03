@@ -1,7 +1,7 @@
 /* ============================================================
  * 点睛网 · 自动刷课助手  ——  内容脚本
  * 注入到 *.zfwx.com / *.dianjingyun.com 的所有页面与 iframe。
- * 流程：找视频 → 保活播放 → 锁定倍速 → 静音 → 播完点「下一节」
+ * 流程：找视频 → 保活播放 → 强制倍速 → 静音 → 播完点「下一节」
  *       → 识别弹题/弹窗 → 右下角悬浮面板 → 状态上报给后台
  * ============================================================ */
 (() => {
@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.2.4';
+  const VERSION = '1.3.0';
   const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
     /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
@@ -22,7 +22,7 @@
     autoNext: true,       // 播完自动下一节
     autoMute: true,       // 自动静音
     rate: 1.5,            // 倍速
-    forceRate: false,     // 锁定倍速（播放器重置也拉不回来）
+    forceRate: true,      // 强制倍速（页面改写也压住）
     endThreshold: 1.5,    // 距结尾多少秒算“播完”
     nextDelayMinMs: 4000, // 播完后最短等待（随机区间下限）
     nextDelayMaxMs: 6000, // 播完后最长等待（随机区间上限）
@@ -211,15 +211,44 @@
     return [v.currentSrc || v.src || '', Math.round(v.duration || 0)].join('|');
   }
 
-  function applyPlayback(v) {
-    if (!v) return;
+  /* 把目标倍速告知页面世界的 rate-lock.js，并对当前所有媒体元素拉一次 */
+  function syncRateLock(v) {
+    const on = !!S.forceRate && S.enabled;
     if (window.__DJZK_RATE) {
       window.__DJZK_RATE.set(S.rate);
-      window.__DJZK_RATE.enable(!!S.forceRate && S.enabled);
+      window.__DJZK_RATE.enable(on);
     }
-    if (isFinite(S.rate) && Math.abs(v.playbackRate - S.rate) > 0.01) {
+    try { window.postMessage({ __djzk_rate: 1, rate: S.rate, on }, '*'); } catch (e) { /* ignore */ }
+    if (!on || !isFinite(S.rate)) return;
+    const all = document.querySelectorAll('video,audio');
+    for (let i = 0; i < all.length; i++) {
+      const el = all[i];
+      if (Math.abs(el.playbackRate - S.rate) > 0.01) {
+        try { el.playbackRate = S.rate; } catch (e) { /* ignore */ }
+      }
+    }
+    if (v && Math.abs(v.playbackRate - S.rate) > 0.01) {
       try { v.playbackRate = S.rate; } catch (e) { /* ignore */ }
     }
+  }
+
+  /* 任意页面手动注入时，页面世界没有 rate-lock.js，这里补一次 */
+  function ensurePageRateLock() {
+    if (window.__DJZK_RATE_MAIN__) return;
+    try {
+      if (!chrome.runtime || !chrome.runtime.getURL) return;
+      const s = document.createElement('script');
+      s.src = chrome.runtime.getURL('src/rate-lock.js');
+      s.async = false;
+      s.onload = () => s.remove();
+      s.onerror = () => s.remove();
+      (document.head || document.documentElement).appendChild(s);
+    } catch (e) { /* ignore */ }
+  }
+
+  function applyPlayback(v) {
+    if (!v) return;
+    syncRateLock(v);
     if (S.autoMute) {
       if (!v.muted) {
         prevVolume = v.volume || 1;
@@ -807,7 +836,7 @@
             <button class="tag" data-t="autoPlay">自动播放</button>
             <button class="tag" data-t="autoNext">自动下一节</button>
             <button class="tag" data-t="autoMute">静音</button>
-            <button class="tag" data-t="forceRate">锁定倍速</button>
+            <button class="tag" data-t="forceRate">强制倍速</button>
             <button class="tag" data-t="pauseOnQuiz">弹题暂停</button>
           </div>
           <div class="rate">
@@ -1029,6 +1058,7 @@
 
     function boot() {
       installRateLock();
+      ensurePageRateLock();
       applyToDom();
       timer = setInterval(tick, 1000);
       document.addEventListener('visibilitychange', () => setTimeout(tick, 300));
@@ -1051,8 +1081,8 @@
     }
   }
 
-  /* 锁定倍速：覆盖 HTMLMediaElement.prototype.playbackRate
-     —— 有的播放器在 seek / 切清晰度 / 插入广告后把倍速重置回 1x */
+  /* 隔离世界的弱兜底：只影响本插件自己读写；真正的强制倍速在 src/rate-lock.js
+     （manifest 以 world:"MAIN" 注入页面世界） */
   function installRateLock() {
     if (window.__DJZK_RATE) return;
     try {
