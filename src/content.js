@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.1.0';
+  const VERSION = '1.1.1';
   const HOST_OK = /(^|\.)zfwx\.com$/i.test(location.hostname) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
   const IS_TOP = (() => { try { return window.top === window; } catch (e) { return false; } })();
@@ -555,7 +555,6 @@
         .rate{display:flex;align-items:center;gap:6px;margin-bottom:8px}
         .rate .val{flex:1;text-align:center;color:#fff;font-weight:600;font-variant-numeric:tabular-nums}
         .ft{display:flex;justify-content:space-between;font-size:10px;color:#5f7091;border-top:1px solid rgba(255,255,255,.07);padding-top:6px}
-        .ft a{color:#7ea6ff;text-decoration:none;cursor:pointer}
         .fold .bd{display:none}
         .toast{position:fixed;left:50%;bottom:80px;transform:translateX(-50%);background:rgba(20,26,40,.95);
                color:#fff;padding:6px 12px;border-radius:8px;font-size:12px;z-index:2147483647;white-space:nowrap}
@@ -589,7 +588,6 @@
           </div>
           <div class="ft">
             <span data-f="lessons">本次 0 节</span>
-            <a data-act="settings">全部设置</a>
           </div>
         </div>
       </div>`;
@@ -640,10 +638,6 @@
         case 'pick': sendCmd('pick'); break;
         case 'rate-': saveSettings({ rate: stepRate(S.rate, -1) }); break;
         case 'rate+': saveSettings({ rate: stepRate(S.rate, 1) }); break;
-        case 'settings':
-          if (chromep() && chrome.runtime.getURL) window.open(chrome.runtime.getURL('src/popup.html'), '_blank');
-          else ui.toast('请在扩展图标里打开设置');
-          break;
       }
     });
 
