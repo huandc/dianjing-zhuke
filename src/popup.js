@@ -424,6 +424,7 @@ async function init() {
   $('#nextBtn').addEventListener('click', () => cmd('next'));
   $('#pickBtn').addEventListener('click', () => cmd('pick'));
   $('#scanBtn').addEventListener('click', () => cmd('scan'));
+  $('#courseBtn').addEventListener('click', () => cmd('course'));
   $('#goBtn').addEventListener('click', () => cmd('go'));
   $('#injectBtn').addEventListener('click', inject);
   $('#statsBtn').addEventListener('click', showStats);

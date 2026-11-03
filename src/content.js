@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.6.0';
+  const VERSION = '1.7.0';
   const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
     /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
@@ -746,6 +746,7 @@
   let listPageAt = 0;
   let lastQueueClickAt = 0;
   let harvesting = false;
+  let queueBusy = false;
 
   const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -763,7 +764,7 @@
       chrome.storage.local.get({ [QUEUE_KEY]: null }, (res) => {
         const q = res && res[QUEUE_KEY];
         if (q && Array.isArray(q.items)) {
-          queue = { url: q.url || '', at: q.at || 0, items: q.items, curKey: q.curKey || '' };
+          queue = { url: q.url || '', at: q.at || 0, items: q.items, curKey: q.curKey || '', course: q.course || '' };
         }
         if (cb) cb();
       });
@@ -847,26 +848,125 @@
     }
   }
 
-  /* 点队列里的下一条：重新从 DOM 读进度，已 100% 的直接标记完成 */
-  function queueNext() {
+  /* 点队列里的下一条：重新从 DOM 读进度，已 100% 的直接标记完成。
+     套课重新加载后小节可能还没展开 → 先点开对应课程标题再找一次。 */
+  async function queueNext() {
+    if (queueBusy) return false;
     const pend = queuePending();
     if (!pend.length) return false;
-    const rows = listRows();
-    for (const it of pend) {
-      const row = rows.find((r) => r.key === it.key) || null;
-      if (row && row.pct >= 100) { it.done = true; saveQueue(); continue; }
-      if (!row) { it.done = true; msg = '队列项在当前页找不到，已跳过：' + it.title.slice(0, 20); saveQueue(); continue; }
-      const btn = row.el.querySelector('.player') || row.el.querySelector('.className');
-      if (!btn) { it.done = true; saveQueue(); continue; }
-      queue.curKey = it.key;
-      saveQueue();
-      lastQueueClickAt = now();
-      msg = '列表连播：进入「' + it.title.slice(0, 30) + '」';
-      render();
-      clickEl(btn);
-      return true;
+    queueBusy = true;
+    try {
+      let rows = listRows();
+      const first = pend[0];
+      if (!rows.some((r) => r.key === first.key) && first.course) {
+        const titleEl = [...document.querySelectorAll('.courseList .className.classTitle')]
+          .find((el) => norm(el.getAttribute('title') || el.textContent) === first.course);
+        if (titleEl) {
+          msg = '展开课程「' + first.course.slice(0, 24) + '」…';
+          render();
+          clickEl(titleEl);
+          await sleepMs(1200);
+          rows = listRows();
+        }
+      }
+      for (const it of pend) {
+        const row = rows.find((r) => r.key === it.key) || null;
+        if (row && row.pct >= 100) { it.done = true; saveQueue(); continue; }
+        if (!row) { it.done = true; msg = '队列项在当前页找不到，已跳过：' + it.title.slice(0, 20); saveQueue(); continue; }
+        const btn = row.el.querySelector('.player') || row.el.querySelector('.className');
+        if (!btn) { it.done = true; saveQueue(); continue; }
+        queue.curKey = it.key;
+        saveQueue();
+        lastQueueClickAt = now();
+        msg = '列表连播：进入「' + it.title.slice(0, 30) + '」';
+        render();
+        clickEl(btn);
+        return true;
+      }
+      return false;
+    } finally {
+      queueBusy = false;
     }
-    return false;
+  }
+
+  /* ------------------------- 选中一门课，播它下面的所有小节 ------------------------- */
+  function courseRowsIn(box) {
+    const out = [];
+    const seen = new Set();
+    for (const vl of box.querySelectorAll('.videoList')) {
+      const nameEl = vl.querySelector('.className');
+      const title = nameEl ? norm(nameEl.textContent).slice(0, 120) : '';
+      if (!title) continue;
+      const course = courseTitleOf(vl);
+      const key = course + '||' + title;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const pctEl = vl.querySelector('.progress_num');
+      let pct = parseInt(String((pctEl && pctEl.textContent) || '').replace(/[^\d]/g, ''), 10);
+      if (!isFinite(pct)) pct = 0;
+      out.push({ key, course, title, pct, done: false });
+    }
+    return out;
+  }
+
+  async function playCourse(box, name) {
+    if (!box) { msg = '没定位到课程行'; render(); return null; }
+    if (!box.querySelector('.videoList')) {
+      const t = box.querySelector('.className.classTitle') || box;
+      msg = '正在展开「' + name.slice(0, 24) + '」…';
+      render();
+      clickEl(t);
+      await sleepMs(1200);
+    }
+    let items = courseRowsIn(box);
+    if (!items.length) {
+      msg = '这门课下面没读到小节，试试先展开再点「选择课程」';
+      render();
+      return null;
+    }
+    queue = { url: location.href, at: now(), items, curKey: '', course: name };
+    saveQueue();
+    const already = items.filter((it) => it.pct >= 100).length;
+    msg = '已选「' + name.slice(0, 24) + '」：共 ' + items.length + ' 节' +
+      (already ? '（其中 ' + already + ' 节已听完会跳过）' : '') + '，开始播放…';
+    render(); report(true);
+    setTimeout(() => { queueNext(); }, 900);
+    return items;
+  }
+
+  let coursePicking = false;
+  function startCoursePicker() {
+    if (!isCourseListPage()) { msg = '当前不是课程列表页'; render(); return; }
+    if (coursePicking) return;
+    coursePicking = true;
+    const tip = document.createElement('div');
+    tip.textContent = '点一门课程的名称，插件会播放它下面的所有小节（Esc 取消）';
+    tip.style.cssText = 'position:fixed;z-index:2147483647;left:50%;top:16px;transform:translateX(-50%);' +
+      'background:rgba(16,22,36,.96);color:#dce7ff;padding:9px 15px;border-radius:10px;' +
+      'font:13px/1.4 -apple-system,"PingFang SC",sans-serif;box-shadow:0 6px 20px rgba(0,0,0,.45);white-space:nowrap';
+    document.documentElement.appendChild(tip);
+
+    const cleanup = () => {
+      coursePicking = false;
+      tip.remove();
+      document.removeEventListener('click', onClick, true);
+      document.removeEventListener('keydown', onKey, true);
+    };
+    const onClick = (e) => {
+      const titleEl = e.target && e.target.closest && e.target.closest('.courseList .className.classTitle');
+      if (!titleEl) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const box = titleEl.closest('.courseHid') || titleEl.closest('.courseDetail');
+      const name = norm(titleEl.getAttribute('title') || titleEl.textContent);
+      cleanup();
+      playCourse(box, name);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') { cleanup(); msg = '已取消选择课程'; render(); } };
+    document.addEventListener('click', onClick, true);
+    document.addEventListener('keydown', onKey, true);
+    msg = '请点一门课程的名称…';
+    render();
   }
 
   /* 本课程已经在播放页听完 → 记完成，回列表播下一条 */
@@ -1026,6 +1126,7 @@
     if (cmd === 'pick') startPicker();
     if (cmd === 'scan') harvestQueue();
     if (cmd === 'go') queueNext();
+    if (cmd === 'course') startCoursePicker();
   }
 
   function saveSettings(patch) {
@@ -1130,7 +1231,8 @@
             <button class="b" data-act="pick">拾取「下一节」</button>
           </div>
           <div class="rowbtns" data-f="scanRow" hidden>
-            <button class="b" data-act="scan">扫描列表排队</button>
+            <button class="b" data-act="scan">扫描整页</button>
+            <button class="b" data-act="course">选择课程</button>
             <button class="b" data-act="go">开始连播</button>
           </div>
           <div class="sec">
@@ -1246,6 +1348,7 @@
         case 'pick': sendCmd('pick'); break;
         case 'scan': sendCmd('scan'); break;
         case 'go': sendCmd('go'); break;
+        case 'course': sendCmd('course'); break;
         case 'rate-': saveSettings({ rate: stepRate(S.rate, -1) }); break;
         case 'rate+': saveSettings({ rate: stepRate(S.rate, 1) }); break;
       }
@@ -1367,6 +1470,7 @@
       else if (m.cmd === 'pick') startPicker();
       else if (m.cmd === 'scan') harvestQueue();
       else if (m.cmd === 'go') queueNext();
+      else if (m.cmd === 'course') startCoursePicker();
       else if (m.cmd === 'play') applyPlayback(video || pickVideo());
       if (reply) reply({ ok: true, state: snapshot() });
       return true;
@@ -1456,7 +1560,8 @@
   window.__DJZK_TEST__ = {
     pickVideo, collectCandidates, doNext, cssPath, snapshot, delayRange: nextDelayRange,
     nearEnd, rowCollapsed, tick, clampRate,
-    isCourseListPage, listRows, harvestQueue, queueNext, queueGotoList, get queue() { return queue; },
+    isCourseListPage, listRows, harvestQueue, queueNext, queueGotoList, startCoursePicker, playCourse,
+    courseRowsIn, get queue() { return queue; },
     get settings() { return S; },
     get msg() { return msg; }
   };

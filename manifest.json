@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "点睛网 · 自动刷课助手",
-  "version": "1.6.0",
+  "version": "1.7.0",
   "description": "自动播放/续播点睛网课程视频，播完自动进入下一节，强制倍速、静音与弹题暂停提醒。",
   "minimum_chrome_version": "111",
   "permissions": [

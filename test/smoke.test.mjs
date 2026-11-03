@@ -368,15 +368,29 @@ const lst = LT.snapshot();
 check('快照标记为列表模式', lst.listMode === true);
 check('快照待听列表来自队列', lst.upcomingTotal === 2 && /问题二/.test(lst.upcoming[0].text), JSON.stringify(lst.upcoming && lst.upcoming[0]));
 
-const go1 = LT.queueNext();
+const go1 = await LT.queueNext();
 check('连播点了队列第一条', go1 === true && clicked.length === 1 && /问题二/.test(clicked[0]), clicked.join(' | '));
 check('当前队列项已记录', /问题二/.test(lstore.djzk_queue.curKey || ''), lstore.djzk_queue.curKey);
 
 /* 把问题二标成 100%（模拟听完回列表），下一次应跳过它点问题三 */
 const row2 = [...lw.document.querySelectorAll('.videoList')].find((el) => el.textContent.includes('问题二'));
 row2.querySelector('.progress_num').textContent = '100%';
-const go2 = LT.queueNext();
+const go2 = await LT.queueNext();
 check('已听完的条目被跳过', go2 === true && clicked.length === 2 && /问题三/.test(clicked[1]), clicked.join(' | '));
+
+/* 选择课程：点课程名 → 只收该课程的视频 → 从第一节开始播 */
+lw.document.querySelectorAll('.videoList').forEach((vl) => {
+  vl.querySelector('.progress_num').textContent = '0%';
+});
+LT.startCoursePicker();
+const titleEl = lw.document.querySelector('.courseDetail .classTitle');
+titleEl.dispatchEvent(new lw.MouseEvent('click', { bubbles: true, cancelable: true }));
+await sleep(1400);
+const picked = lstore.djzk_queue;
+check('选择课程后队列换成该课程', !!picked && /刑事业务公益课程/.test(picked.course || ''), picked && picked.course);
+check('该课程下的视频全收：3 节', !!picked && picked.items.length === 3, picked && 'items=' + picked.items.length);
+check('选中后开始播放第一节', /问题一/.test(picked.curKey || ''), picked && picked.curKey);
+check('总览里的待听换成该课程', LT.snapshot().upcomingTotal === 3, String(LT.snapshot().upcomingTotal));
 
 const failed = results.filter((r) => !r.ok);
 console.log('\n' + (failed.length ? `❌ ${failed.length}/${results.length} 项失败` : `✅ 全部 ${results.length} 项通过`));

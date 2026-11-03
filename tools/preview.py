@@ -130,6 +130,97 @@ PANEL_PAGE = """<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><t
 </body></html>"""
 
 
+
+LIST_STUB = """
+window.__DJZK_FORCE__ = true;
+window.chrome = {
+  storage: {
+    local: {
+      get: (d, cb) => {
+        const out = {};
+        for (const k of Object.keys(d)) {
+          if (k === 'djzk_queue') {
+            out[k] = { url: location.href, at: Date.now(), curKey: '', course: '1段｜刑事业务公益课程', items: [
+              { key: '1段｜刑事业务公益课程||问题二：涉案财物的范围', course: '1段｜刑事业务公益课程', title: '问题二：涉案财物的范围', pct: 40, done: false },
+              { key: '1段｜刑事业务公益课程||问题三：案外人异议的审查', course: '1段｜刑事业务公益课程', title: '问题三：案外人异议的审查', pct: 0, done: false },
+              { key: '1段｜刑事业务公益课程||问题四：执行中的财产处置', course: '1段｜刑事业务公益课程', title: '问题四：执行中的财产处置', pct: 0, done: false },
+              { key: '2.1｜资本充实责任||问题一：出资加速到期', course: '2.1｜资本充实责任', title: '问题一：出资加速到期', pct: 10, done: false }
+            ] };
+          } else if (k === 'djzk_settings') {
+            out[k] = { enabled: true, autoPlay: true, autoNext: true, autoMute: true, rate: 1.5, forceRate: true,
+              endThreshold: 1.5, nextDelayMinMs: 4000, nextDelayMaxMs: 6000, autoList: false, listRun: false,
+              pauseOnQuiz: true, beep: false, showPanel: true, panelPos: null, customSelectors: [] };
+          } else { out[k] = d[k]; }
+        }
+        cb(out);
+      },
+      set: () => {}
+    },
+    onChanged: { addListener: () => {} }
+  },
+  runtime: { onMessage: { addListener: () => {} }, sendMessage: () => {}, getURL: (p) => p, lastError: null }
+};
+"""
+
+LIST_PAGE = """<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>听课中心</title>
+<style>
+  body { margin: 0; font: 14px/1.6 -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif; background: #f1f4f9; color: #1f2937; }
+  .top { height: 52px; background: #fff; border-bottom: 1px solid #e5e7eb; display: flex; align-items: center; padding: 0 24px; gap: 12px; }
+  .logo { width: 26px; height: 26px; border-radius: 7px; background: linear-gradient(135deg, #2563eb, #22b8cf); }
+  .wrap { max-width: 900px; margin: 20px auto; }
+  .courseNav { display: flex; gap: 22px; list-style: none; margin: 0 0 10px; padding: 0 4px; font-size: 13px; color: #6b7280; }
+  .courseNav li.on { color: #1d4ed8; font-weight: 600; border-bottom: 2px solid #1d4ed8; padding-bottom: 6px; }
+  .courseCont { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 8px 24px rgba(15,23,42,.06); }
+  .courseDetail { display: flex; align-items: center; gap: 12px; padding: 13px 20px; border-bottom: 1px solid #f1f5f9; }
+  .courseDetail.courseTT { background: #f8fafc; color: #94a3b8; font-size: 12px; }
+  .index { width: 26px; color: #9ca3af; font-size: 12px; }
+  .className { font-weight: 600; font-size: 14px; }
+  .className em { font-style: normal; }
+  .courseName-sub { font-size: 13px; color: #6b7280; }
+  .courseVideo { padding-left: 26px; }
+  .videoList { display: flex; align-items: center; gap: 12px; padding: 9px 8px; border-bottom: 1px dashed #eef2f7; font-size: 13px; color: #374151; }
+  .videoList .className { font-weight: 400; flex: 1; }
+  .timer { color: #9ca3af; font-size: 12px; }
+  .progress { color: #6b7280; font-size: 12px; }
+  .player { color: #2563eb; font-size: 12px; border: 1px solid #bfdbfe; background: #eff6ff; border-radius: 5px; padding: 2px 9px; }
+</style></head>
+<body>
+<div class="top"><div class="logo"></div><b>点睛云</b><span style="color:#94a3b8">听课中心</span></div>
+<div class="wrap">
+  <div class="courseList">
+    <ul class="courseNav of"><li class="on">正听</li><li>未听</li><li>已听</li><li>必修</li><li>选修</li><li>全部</li></ul>
+    <div class="courseCont">
+      <div class="courseDetail courseTT of"><span class="index">序号</span><span class="className">课程名称</span></div>
+      <div class="courseDetail of">
+        <span class="index">T1</span>
+        <span class="className classTitle isCourse" title="1段｜刑事业务公益课程"><em>1段｜刑事业务公益课程</em></span>
+      </div>
+      <div class="courseHid">
+        <div class="courseVideo vidHidden">
+          <div class="videoList of"><span class="className">1.1｜刑事涉案财产处置</span><span class="timer">15.08</span>
+            <span class="progress"><p class="progress_num"><i>100</i>%</p></span><span class="player">播放</span></div>
+          <div class="videoList of"><span class="className">问题二：涉案财物的范围</span><span class="timer">2.33</span>
+            <span class="progress"><p class="progress_num"><i>40</i>%</p></span><span class="player">播放</span></div>
+          <div class="videoList of"><span class="className">问题三：案外人异议的审查</span><span class="timer">1.05</span>
+            <span class="progress"><p class="progress_num"><i>0</i>%</p></span><span class="player">播放</span></div>
+          <div class="videoList of"><span class="className">问题四：执行中的财产处置</span><span class="timer">1.20</span>
+            <span class="progress"><p class="progress_num"><i>0</i>%</p></span><span class="player">播放</span></div>
+        </div>
+      </div>
+      <div class="courseDetail of">
+        <span class="index">D2</span>
+        <span class="className classTitle isCourse" title="2.1｜资本充实责任"><em>2.1｜资本充实责任</em></span>
+        <div class="courseVideo vidHidden">
+          <div class="videoList of"><span class="className">问题一：出资加速到期</span><span class="timer">3.02</span>
+            <span class="progress"><p class="progress_num"><i>10</i>%</p></span><span class="player">播放</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body></html>"""
+
+
 def run_chrome(url, out, size):
     tmp = tempfile.mkdtemp(prefix="djzk-preview-")
     cmd = [
@@ -162,6 +253,13 @@ def build_panel(work):
     open(os.path.join(work, "panel.html"), "w", encoding="utf-8").write(page)
 
 
+def build_list(work):
+    content = open(os.path.join(ROOT, "src/content.js"), encoding="utf-8").read()
+    page = LIST_PAGE.replace("<body>", "<body>\n<script>\n" + LIST_STUB + "\n</script>")
+    page = page.replace("</body>", "<script>\n" + content + "\n</script>\n</body>")
+    open(os.path.join(work, "list.html"), "w", encoding="utf-8").write(page)
+
+
 def main():
     if not os.path.exists(CHROME):
         sys.exit("找不到 Chrome：" + CHROME)
@@ -169,11 +267,14 @@ def main():
     with tempfile.TemporaryDirectory(prefix="djzk-") as work:
         build_popup(work)
         build_panel(work)
+        build_list(work)
         run_chrome("file://" + os.path.join(work, "popup.html"),
                    os.path.join(DOCS, "popup.png"), "342,1180")
         run_chrome("file://" + os.path.join(work, "panel.html"),
                    os.path.join(DOCS, "panel.png"), "1160,780")
-    for f in ("popup.png", "panel.png"):
+        run_chrome("file://" + os.path.join(work, "list.html"),
+                   os.path.join(DOCS, "list.png"), "1160,820")
+    for f in ("popup.png", "panel.png", "list.png"):
         p = os.path.join(DOCS, f)
         print(f, os.path.getsize(p), "bytes")
 
