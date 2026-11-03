@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.4.0';
+  const VERSION = '1.4.1';
   const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
     /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
@@ -62,7 +62,8 @@
   let video = null;
   let videoSig = '';
   let remote = null;        // 来自子 frame 的状态（顶层 frame 用）
-  let nextAt = 0;           // 计划点“下一节”的时间戳
+  let nextAt = 0;
+  let prevCur = 0;           // 计划点“下一节”的时间戳
   let nextTries = 0;        // 本节已尝试次数
   let lastClickAt = 0;
   let lastNextSig = '';
@@ -266,9 +267,26 @@
     }
   }
 
+  /* 判定「快播完」：倍速越高，tick 间隔内走过的媒体时间越多，
+     窗口要按倍速放大，否则 2× 时容易整段跳过结尾 */
   function nearEnd(v) {
     if (!v || !isFinite(v.duration) || v.duration <= 0) return false;
-    return v.duration - v.currentTime <= Math.max(0.8, S.endThreshold);
+    const rate = isFinite(v.playbackRate) && v.playbackRate > 0 ? v.playbackRate : 1;
+    const win = Math.max(1.5, S.endThreshold || 1.5) * rate + 0.4;
+    return v.duration - v.currentTime <= win;
+  }
+
+  /* 行是否被折叠隐藏：高度为 0，或祖先 overflow:hidden 且高度极小 */
+  function rowCollapsed(li) {
+    if (!li || !li.isConnected) return true;
+    const r = li.getBoundingClientRect();
+    if (r.height < 8) return true;
+    for (let el = li; el && el !== document.body; el = el.parentElement) {
+      const cs = getComputedStyle(el);
+      if (cs.display === 'none' || cs.visibility === 'hidden') return true;
+      if (el !== li && cs.overflow === 'hidden' && el.clientHeight < 10) return true;
+    }
+    return false;
   }
 
   function noteVideo(v) {
@@ -314,7 +332,7 @@
     if (cur < rows.length - 1) {
       const next = rows[cur + 1];
       const label = labelOfRow(next);
-      if (isVisible(next)) {
+      if (!rowCollapsed(next)) {
         const row = next.querySelector('p.name') || next.querySelector('a') || next;
         return { el: row, label: label || labelOfRow(row), cur: curLabel, text: textShort(row) };
       }
@@ -332,7 +350,7 @@
       const label = labelOfRow(nx.querySelector('h3.courseName') || nx);
       if (head) {
         const row = firstRowOf(nx);
-        if (row && isVisible(row)) return { el: row, label: label, cur: curLabel, text: textShort(row) };
+        if (row && !rowCollapsed(row)) return { el: row, label: label, cur: curLabel, text: textShort(row) };
         return { el: head, label: label, cur: curLabel, then: () => firstRowOf(nx), text: textShort(head) };
       }
     }
@@ -720,7 +738,11 @@
 
     if (v) {
       applyPlayback(v);
-      if (v.ended || nearEnd(v)) scheduleNext();
+      /* 播放器播完后常把 currentTime 归零而不是置 ended，这里用「进度回跳」兜住 */
+      const dur = v.duration;
+      const backJump = isFinite(dur) && dur > 10 && prevCur > dur * 0.85 && v.currentTime < 1.5 && !v.paused;
+      if (v.ended || nearEnd(v) || backJump) scheduleNext();
+      prevCur = isFinite(v.currentTime) ? v.currentTime : 0;
       /* 点了下一节但视频没变 → 12 秒后重试（最多 3 次） */
       if (lastNextSig && lastNextSig === videoSig && nextTries > 0 && nextTries < 3 &&
           now() - lastClickAt > 12000 && !nextAt) {
@@ -1170,7 +1192,7 @@
       installRateLock();
       ensurePageRateLock();
       applyToDom();
-      timer = setInterval(tick, 1000);
+      timer = setInterval(tick, 600);
       document.addEventListener('visibilitychange', () => setTimeout(tick, 300));
       document.addEventListener('ended', (e) => {
         if (e.target && e.target.tagName === 'VIDEO') {
@@ -1227,6 +1249,7 @@
   /* 调试 / 自动化测试入口 */
   window.__DJZK_TEST__ = {
     pickVideo, collectCandidates, doNext, cssPath, snapshot, delayRange: nextDelayRange,
+    nearEnd, rowCollapsed, tick,
     get settings() { return S; },
     get msg() { return msg; }
   };

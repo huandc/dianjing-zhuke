@@ -253,6 +253,14 @@ check('快照带视频源', /a\.mp4/.test(String(st5.videoSrc)), st5.videoSrc);
 check('快照带后续待听列表', !!st5.upcoming && st5.upcoming[0] && st5.upcoming[0].label === '2.2', JSON.stringify(st5.upcoming && st5.upcoming[0]));
 check('后续待听总数正确', st5.upcomingTotal === 1, String(st5.upcomingTotal));
 
+const hiddenRow = [...window.document.querySelectorAll('.animateH li')].find((el) => el.textContent.includes('2.2'));
+const shownRow = [...window.document.querySelectorAll('.rightCatalogList li')].find((el) => el.textContent.includes('2.1'));
+check('折叠章节里的行判定为收起', !!hiddenRow && T.rowCollapsed(hiddenRow) === true);
+check('展开章节里的行不算收起', !!shownRow && T.rowCollapsed(shownRow) === false);
+
+check('2× 时结尾窗口按倍速放大', T.nearEnd({ duration: 100, currentTime: 97, playbackRate: 2 }) === true);
+check('1× 且还剩 3 秒不算结尾', T.nearEnd({ duration: 100, currentTime: 97, playbackRate: 1 }) === false);
+
 /* ---------- [13] 强制倍速：页面世界 rate-lock.js ----------
  * 单独开一个干净的 jsdom：主用例里 content.js 自己也包了一层
  * playbackRate，双层包装会让「底层速率」断言失真。
