@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.2.2';
+  const VERSION = '1.2.3';
   const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
     /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
@@ -268,11 +268,9 @@
     const box = document.querySelector('.play_playerMLBox');
     if (!box) return null;
     const onCls = (el) => /(^|\s)on(\s|$)/.test(String((el && el.className) || ''));
-    const labelOfRow = (el) => {
-      const m = LESSON_LABEL.exec(String((el && el.textContent) || ''));
-      return m ? m[1] + '.' + m[2] : '';
-    };
+    const labelOfRow = lessonLabelText;
     const headOf = (item) => (item && (item.querySelector('h3.courseName a') || item.querySelector('h3.courseName'))) || null;
+    const firstRowOf = (item) => item && (item.querySelector('.rightCatalogList li p.name') || item.querySelector('.rightCatalogList li'));
     const rows = [...box.querySelectorAll('.rightCatalogList li')];
 
     let cur = rows.findIndex((li) => onCls(li) || li.getAttribute('data-status') === 'bofang');
@@ -281,6 +279,7 @@
       if (label) cur = rows.findIndex((li) => { const l = lessonLabelOf(li); return l && cmpLabel(l, label) === 0; });
     }
     if (cur < 0) return null;
+    const curLabel = labelOfRow(rows[cur]);
 
     /* 同一章内还有下一条小节 */
     if (cur < rows.length - 1) {
@@ -288,10 +287,11 @@
       const label = labelOfRow(next);
       if (isVisible(next)) {
         const row = next.querySelector('p.name') || next.querySelector('a') || next;
-        return { el: row, label: label || labelOfRow(row) };
+        return { el: row, label: label || labelOfRow(row), cur: curLabel };
       }
-      const head = headOf(next.closest('.courseItem'));
-      if (head) return { el: head, label: label };
+      const item = next.closest('.courseItem');
+      const head = headOf(item);
+      if (head) return { el: head, label: label, cur: curLabel, then: () => firstRowOf(item) };
     }
 
     /* 本章最后一条：点下一个 courseItem 的标题 */
@@ -300,8 +300,16 @@
     if (ci >= 0 && ci < items.length - 1) {
       const nx = items[ci + 1];
       const head = headOf(nx);
-      if (head) return { el: head, label: labelOfRow(nx.querySelector('h3.courseName') || nx) };
+      const label = labelOfRow(nx.querySelector('h3.courseName') || nx);
+      if (head) {
+        const row = firstRowOf(nx);
+        if (row && isVisible(row)) return { el: row, label: label, cur: curLabel };
+        return { el: head, label: label, cur: curLabel, then: () => firstRowOf(nx) };
+      }
     }
+
+    /* 目录可能懒加载：滚到底触发一次请求，下次 tick 再看 */
+    nudgeCatalogLoad(box);
     return null;
   }
 
@@ -319,6 +327,11 @@
   }
 
   function cmpLabel(a, b) { return (a[0] - b[0]) || (a[1] - b[1]); }
+
+  function lessonLabelText(el) {
+    const m = LESSON_LABEL.exec(String((el && el.textContent) || ''));
+    return m ? m[1] + '.' + m[2] : '';
+  }
 
   function activeLessonLabel() {
     const sel = '[class*="active"],[class*="current"],[class*="playing"],[aria-current]';
@@ -387,7 +400,41 @@
     const idx = items.findIndex((it) => cmpLabel(it.label, cur) === 0);
     if (idx < 0 || idx === items.length - 1) return null;
     const nxt = items[idx + 1];
-    return { el: nxt.el, label: nxt.label.join('.') };
+    return { el: nxt.el, label: nxt.label.join('.'), cur: items[idx].label.join('.') };
+  }
+
+  /* 目录是懒加载时，滚到底触发加载 */
+  function nudgeCatalogLoad(box) {
+    try {
+      const list = ['.rightCatalogBox', '.play_playerCont', '.play_playerMLBox'];
+      for (const sel of list) {
+        const el = box.querySelector(sel) || (sel === '.play_playerMLBox' ? box : null);
+        if (!el) continue;
+        if (el.scrollHeight > el.clientHeight + 20) {
+          el.scrollTop = el.scrollHeight;
+          el.dispatchEvent(new Event('scroll', { bubbles: true }));
+          return true;
+        }
+      }
+    } catch (e) { /* ignore */ }
+    return false;
+  }
+
+  /* 只读：当前节 / 下一节，用于面板与弹窗展示「识别结果」 */
+  function catalogPeek() {
+    try {
+      const box = document.querySelector('.play_playerMLBox');
+      if (box) {
+        const zf = zfwxCatalogNext();
+        const rows = [...box.querySelectorAll('.rightCatalogList li')];
+        const cur = rows.find((li) => /(^|\s)on(\s|$)/.test(String(li.className || '')) || li.getAttribute('data-status') === 'bofang');
+        return { cur: cur ? lessonLabelText(cur) : '', next: (zf && zf.label) || '' };
+      }
+      const g = catalogNext();
+      return { cur: (pageLessonLabel() || []).join('.'), next: (g && g.label) || '' };
+    } catch (e) {
+      return { cur: '', next: '' };
+    }
   }
 
   /* ------------------------- 下一节 ------------------------- */
@@ -408,7 +455,7 @@
     /* 点睛网播放页的右侧目录（真实结构），优先级仅次于手动拾取 */
     try {
       const zf = zfwxCatalogNext();
-      if (zf && zf.el) out.push({ el: zf.el, pri: -6, tag: '目录 ' + (zf.label || '下一节') });
+      if (zf && zf.el) out.push({ el: zf.el, pri: -6, tag: '目录 ' + (zf.label || '下一节'), then: zf.then });
     } catch (e) { /* ignore */ }
 
     /* 其他站点的通用目录模式 */
@@ -444,9 +491,23 @@
       return false;
     }
     nextTries += 1;
-    const target = cands[0].el;
-    msg = '点击下一节：' + (cands[0].tag || target.tagName.toLowerCase());
+    const cand = cands[0];
+    const target = cand.el;
+    msg = '点击下一节：' + (cand.tag || target.tagName.toLowerCase());
     clickEl(target);
+    /* 章节是折叠的：先点标题展开，再点小节 */
+    if (typeof cand.then === 'function') {
+      setTimeout(() => {
+        try {
+          const el = cand.then();
+          if (el && el.isConnected) {
+            msg = '已展开章节，正在点小节';
+            clickEl(el);
+            report(true);
+          }
+        } catch (e) { /* ignore */ }
+      }, 900);
+    }
     if (countedSig !== videoSig && videoSig) {
       countedSig = videoSig;
       lessonsDone += 1;
@@ -596,6 +657,7 @@
 
   function snapshotLocal() {
     const v = video && video.isConnected ? video : pickVideo();
+    const peek = catalogPeek();
     const cur = v ? (v.currentTime || 0) : 0;
     const dur = v ? (isFinite(v.duration) ? v.duration : 0) : 0;
     return {
@@ -603,6 +665,9 @@
       top: IS_TOP,
       href: location.href,
       host: location.hostname,
+      title: String(document.title || '').slice(0, 140),
+      catalogCur: peek.cur,
+      catalogNext: peek.next,
       hasVideo: !!v,
       playing: !!(v && !v.paused && !v.ended),
       ended: !!(v && v.ended),
@@ -691,6 +756,10 @@
         .bar{height:5px;border-radius:99px;background:rgba(255,255,255,.12);overflow:hidden;margin:2px 0 8px}
         .bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#4f8cff,#7ee0c0);transition:width .4s}
         .msg{font-size:11px;color:#8fa4c9;min-height:30px;margin-bottom:6px;word-break:break-all}
+        .meta{font-size:10px;color:#6c7fa3;margin:0 0 8px}
+        .mrow{display:flex;gap:5px;line-height:1.55}
+        .mrow i{font-style:normal;flex:none;color:#7e8fb3}
+        .mrow span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
         .rowbtns{display:flex;gap:6px;margin-bottom:8px}
         button.b{flex:1;border:1px solid rgba(120,160,255,.3);background:rgba(80,120,255,.16);color:#dce7ff;
                  border-radius:8px;padding:5px 4px;cursor:pointer;font-size:11px;font-family:inherit}
@@ -717,6 +786,11 @@
           <div class="row"><span>进度</span><b data-f="pct">—</b></div>
           <div class="bar"><i data-f="bar"></i></div>
           <div class="msg" data-f="msg">初始化…</div>
+          <div class="meta">
+            <div class="mrow"><i>标题</i><span data-f="title">—</span></div>
+            <div class="mrow"><i>地址</i><span data-f="href">—</span></div>
+            <div class="mrow"><i>目录</i><span data-f="catalog">—</span></div>
+          </div>
           <div class="rowbtns">
             <button class="b" data-act="next">立即下一节</button>
             <button class="b" data-act="pick">拾取「下一节」</button>
@@ -765,6 +839,17 @@
         $('[data-f="bar"]').style.width = (st.hasVideo ? st.pct : 0) + '%';
         const m = st.msg || msg;
         $('[data-f="msg"]').textContent = st.nextIn > 0 ? m + '（' + st.nextIn + 's）' : m;
+        const tEl = $('[data-f="title"]');
+        tEl.textContent = st.title || '—';
+        tEl.title = st.title || '';
+        const hEl = $('[data-f="href"]');
+        hEl.textContent = st.href || '—';
+        hEl.title = st.href || '';
+        const cEl = $('[data-f="catalog"]');
+        const catText = [st.catalogCur && ('当前 ' + st.catalogCur), st.catalogNext && ('下一节 ' + st.catalogNext)]
+          .filter(Boolean).join(' → ');
+        cEl.textContent = catText || '—';
+        cEl.title = catText;
         $('[data-f="rate"]').textContent = fmtRate(st.rate || S.rate);
         $('[data-f="lessons"]').textContent = '本次 ' + lessonsDone + ' 节';
         $('.dot').classList.toggle('on', !!S.enabled);

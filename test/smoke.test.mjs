@@ -227,6 +227,28 @@ check('真实目录结构选中下一节 1.2', !!cands5[0] && cands5[0].tag === 
 cands5[0].el.click();
 check('点击落在 1.2 的条目上', zfClicks.some((t) => t.startsWith('1.2')), zfClicks.join(','));
 
+console.log('\n[12] 折叠章节：先点标题再点小节');
+box.remove();
+window.document.title = '2.1｜公司法修订概述 - 点睛网';
+const box2 = window.document.createElement('div');
+box2.className = 'play_playerMLBox';
+box2.innerHTML = [
+  '<div class="courseItem playIngCourse"><h3 class="courseName on"><a href="javascript:void(0)">2.1｜公司法修订概述</a></h3>',
+  '<div class="animateH"><ul class="rightCatalogList"><li class="hasBuy on" data-status="bofang"><p class="name cw">2.1｜公司法修订概述<em>20分钟</em></p></li></ul></div></div>',
+  '<div class="courseItem"><h3 class="courseName"><a href="javascript:void(0)">2.2｜资本充实责任</a></h3>',
+  '<div class="animateH" style="height:0;overflow:hidden"><ul class="rightCatalogList"><li class="hasBuy"><p class="name cw">2.2｜资本充实责任<em>18分钟</em></p></li></ul></div></div>'
+].join('');
+window.document.body.appendChild(box2);
+const rows2 = box2.querySelectorAll('.rightCatalogList li');
+rows2[rows2.length - 1].getBoundingClientRect = () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 });
+const cands6 = T.collectCandidates();
+check('折叠章节时先点 2.2 标题', !!cands6[0] && cands6[0].tag === '目录 2.2', cands6[0] && cands6[0].tag);
+check('候选带二级点击', !!(cands6[0] && typeof cands6[0].then === 'function'));
+check('二级点击目标是小节行', !!(cands6[0] && cands6[0].then && cands6[0].then().textContent.includes('2.2')));
+const st5 = T.snapshot();
+check('快照带页面标题', st5.title === window.document.title, st5.title);
+check('快照带目录当前/下一节', st5.catalogCur === '2.1' && st5.catalogNext === '2.2', st5.catalogCur + '→' + st5.catalogNext);
+
 const failed = results.filter((r) => !r.ok);
 console.log('\n' + (failed.length ? `❌ ${failed.length}/${results.length} 项失败` : `✅ 全部 ${results.length} 项通过`));
 process.exit(failed.length ? 1 : 0);
