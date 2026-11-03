@@ -138,6 +138,48 @@ function setPill(text, cls) {
   p.className = 'pill' + (cls ? ' ' + cls : '');
 }
 
+let lastUpSig = null;
+
+function stripLabel(label, text) {
+  if (!label) return text || '';
+  const esc = String(label).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return String(text || '').replace(new RegExp('^' + esc + '\\s*[|｜]?\\s*'), '');
+}
+
+/* 「1.2｜xxx」去掉重复的编号前缀 */
+
+
+/* 「后续待听」列表：只在不变化时跳过重建，避免每秒重排 */
+function renderUpcoming(st) {
+  const ups = Array.isArray(st && st.upcoming) ? st.upcoming : [];
+  const total = st && st.upcomingTotal != null ? st.upcomingTotal : ups.length;
+  const ol = $('#upList');
+  const empty = $('#upEmpty');
+  ol.hidden = !ups.length;
+  empty.hidden = !!ups.length;
+
+  const sig = ups.map((u) => (u.label || '') + '|' + (u.text || '')).join('~');
+  if (sig === lastUpSig) {
+    $('#upCount').textContent = total ? total + ' 节' : '—';
+    return;
+  }
+  lastUpSig = sig;
+  ol.textContent = '';
+  for (const u of ups) {
+    const li = document.createElement('li');
+    const b = document.createElement('b');
+    b.textContent = u.label || '';
+    const sp = document.createElement('span');
+    sp.textContent = stripLabel(u.label, u.text);
+    sp.title = u.text || '';
+    li.appendChild(b);
+    li.appendChild(sp);
+    ol.appendChild(li);
+  }
+  $('#upCount').textContent = total ? total + ' 节' : '—';
+  $('#upCount').title = ups.length < total ? '只列出前 ' + ups.length + ' 节' : '';
+}
+
 function renderState(rec) {
   lastState = rec && rec.state ? rec.state : null;
   const st = lastState;
@@ -152,6 +194,7 @@ function renderState(rec) {
     $('#rateNow').textContent = fmtRate(settings.rate);
     $('#lessons').textContent = '0';
     ['pgTitle', 'pgNext', 'pgCatalog', 'pgVideo', 'pgHref'].forEach((id) => { const el = $('#' + id); el.textContent = '—'; el.title = ''; });
+    renderUpcoming(null);
     $('#hint').textContent = tab && /^chrome-extension:/.test(tab.url)
       ? '这是设置页，打开点睛网听课页面即可看到实时状态。'
       : '当前页面没有运行脚本（可能不在点睛网，或需要刷新页面）。';
@@ -183,6 +226,8 @@ function renderState(rec) {
     .filter(Boolean).join(' → ');
   $('#pgCatalog').textContent = cat || '—';
   $('#pgCatalog').title = cat;
+
+  renderUpcoming(st);
 
   const parts = [];
   if (!st.enabled) parts.push('总开关已关闭');

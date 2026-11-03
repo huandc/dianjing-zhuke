@@ -250,6 +250,8 @@ check('快照带页面标题', st5.title === window.document.title, st5.title);
 check('快照带目录当前/下一节', st5.catalogCur === '2.1' && st5.catalogNext === '2.2', st5.catalogCur + '→' + st5.catalogNext);
 check('快照带待听内容', /2\.2/.test(String(st5.nextText)), st5.nextText);
 check('快照带视频源', /a\.mp4/.test(String(st5.videoSrc)), st5.videoSrc);
+check('快照带后续待听列表', !!st5.upcoming && st5.upcoming[0] && st5.upcoming[0].label === '2.2', JSON.stringify(st5.upcoming && st5.upcoming[0]));
+check('后续待听总数正确', st5.upcomingTotal === 1, String(st5.upcomingTotal));
 
 /* ---------- [13] 强制倍速：页面世界 rate-lock.js ----------
  * 单独开一个干净的 jsdom：主用例里 content.js 自己也包了一层

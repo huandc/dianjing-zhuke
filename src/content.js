@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.3.0';
+  const VERSION = '1.4.0';
   const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
     /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
@@ -454,19 +454,86 @@
   }
 
   /* 只读：当前节 / 下一节，用于面板与弹窗展示「识别结果」 */
+  /* 目录条目文本：去掉 <em>105.1分钟/2.33课时</em> 这类时长尾巴 */
+  function cleanItemText(el) {
+    const src = (el && el.querySelector && el.querySelector('p.name')) || el;
+    if (!src) return '';
+    let t = '';
+    for (const n of src.childNodes) {
+      if (n.nodeType === 3) t += n.nodeValue;
+      else if (n.tagName === 'SPAN' || n.tagName === 'A') t += n.textContent || '';
+    }
+    return norm(t || src.textContent || '').slice(0, 90);
+  }
+
+  /* 整个目录（按播放顺序），并标出当前项——给「后续待听」列表用 */
+  function stripLabel(label, text) {
+    if (!label) return text || '';
+    const esc = String(label).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return String(text || '').replace(new RegExp('^' + esc + '\\s*[|｜]?\\s*'), '');
+  }
+
+  function catalogSeries() {
+    const on = (el) => /(^|\s)on(\s|$)/.test(String((el && el.className) || '')) ||
+      (el && el.getAttribute('data-status') === 'bofang');
+    const items = [];
+    const box = document.querySelector('.play_playerMLBox');
+    if (box) {
+      for (const ci of box.querySelectorAll('.courseItem')) {
+        const rows = [...ci.querySelectorAll('.rightCatalogList li')];
+        if (rows.length) {
+          for (const li of rows) items.push({ label: lessonLabelText(li), text: cleanItemText(li), active: on(li) });
+        } else {
+          const head = ci.querySelector('h3.courseName') || ci.querySelector('h3');
+          if (head) items.push({ label: lessonLabelText(head), text: cleanItemText(head), active: on(head) });
+        }
+      }
+      if (items.length) {
+        const indexed = items.map((it, i) => ({ label: it.label, text: it.text, active: it.active, i }));
+        const first = indexed.findIndex((x) => x.active);
+        return { items: indexed.map(({ label, text }) => ({ label, text })), curIndex: first };
+      }
+    }
+    /* 通用目录：所有「1.2」这类编号条目，按编号排序 */
+    const seen = new Set();
+    const list = [];
+    for (const el of document.querySelectorAll('li,a,div,span,p')) {
+      const l = lessonLabelOf(el);
+      if (!l) continue;
+      let nested = false;
+      for (const c of el.children) { if (lessonLabelOf(c)) { nested = true; break; } }
+      if (nested) continue;
+      const key = l.join('.');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      list.push({ l, label: l.join('.'), text: cleanItemText(el) });
+    }
+    list.sort((a, b) => cmpLabel(a.l, b.l));
+    let curIndex = -1;
+    const cur = pageLessonLabel();
+    if (cur) curIndex = list.findIndex((x) => cmpLabel(x.l, cur) === 0);
+    return { items: list.map(({ label, text }) => ({ label, text })), curIndex };
+  }
+
   function catalogPeek() {
     try {
-      const box = document.querySelector('.play_playerMLBox');
-      if (box) {
-        const zf = zfwxCatalogNext();
-        const rows = [...box.querySelectorAll('.rightCatalogList li')];
-        const cur = rows.find((li) => /(^|\s)on(\s|$)/.test(String(li.className || '')) || li.getAttribute('data-status') === 'bofang');
-        return { cur: cur ? lessonLabelText(cur) : '', next: (zf && zf.label) || '', nextText: (zf && zf.text) || '' };
-      }
-      const g = catalogNext();
-      return { cur: (pageLessonLabel() || []).join('.'), next: (g && g.label) || '', nextText: (g && g.text) || '' };
+      const series = catalogSeries();
+      const items = series.items || [];
+      const curIndex = series.curIndex;
+      const curItem = items[curIndex];
+      const rest = curIndex >= 0 ? items.slice(curIndex + 1) : items.slice();
+      const zf = document.querySelector('.play_playerMLBox') ? zfwxCatalogNext() : null;
+      const g = zf ? null : catalogNext();
+      return {
+        cur: (curItem && curItem.label) || (pageLessonLabel() || []).join('.'),
+        next: (zf && zf.label) || (g && g.label) || (rest[0] && rest[0].label) || '',
+        nextText: (zf && zf.text) || (g && g.text) || (rest[0] && rest[0].text) || '',
+        upcoming: rest.slice(0, 80),
+        upcomingTotal: rest.length,
+        curIndex
+      };
     } catch (e) {
-      return { cur: '', next: '', nextText: '' };
+      return { cur: '', next: '', nextText: '', upcoming: [], upcomingTotal: 0, curIndex: -1 };
     }
   }
 
@@ -703,6 +770,8 @@
       catalogCur: peek.cur,
       catalogNext: peek.next,
       nextText: peek.nextText,
+      upcoming: peek.upcoming || [],
+      upcomingTotal: peek.upcomingTotal || 0,
       hasVideo: !!v,
       playing: !!(v && !v.paused && !v.ended),
       ended: !!(v && v.ended),
@@ -795,6 +864,15 @@
         .mrow{display:flex;gap:5px;line-height:1.55}
         .mrow i{font-style:normal;flex:none;color:#7e8fb3}
         .mrow span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .up{margin:0 0 8px}
+        .up-h{display:flex;justify-content:space-between;font-size:10px;color:#7e8fb3;margin-bottom:3px}
+        .up-h b{font-weight:500;color:#6d80a2}
+        .up-list{list-style:none;margin:0;padding:0;max-height:132px;overflow:auto;font-size:10.5px;line-height:1.5}
+        .up-list li{display:flex;gap:4px;padding:1px 0;color:#a9b8d4}
+        .up-list li b{flex:none;color:#6d80a2;font-weight:500;min-width:22px}
+        .up-list li span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .up-list li:first-child{color:#8fe9cd}
+        .up-list .none{color:#5f7091}
         .rowbtns{display:flex;gap:6px;margin-bottom:8px}
         button.b{flex:1;border:1px solid rgba(120,160,255,.3);background:rgba(80,120,255,.16);color:#dce7ff;
                  border-radius:8px;padding:5px 4px;cursor:pointer;font-size:11px;font-family:inherit}
@@ -828,6 +906,10 @@
             <div class="mrow"><i>视频</i><span data-f="videoSrc">—</span></div>
             <div class="mrow"><i>地址</i><span data-f="href">—</span></div>
           </div>
+          <div class="up">
+            <div class="up-h"><i>后续待听</i><b data-f="upCount">—</b></div>
+            <ol class="up-list" data-f="upList"></ol>
+          </div>
           <div class="rowbtns">
             <button class="b" data-act="next">立即下一节</button>
             <button class="b" data-act="pick">拾取「下一节」</button>
@@ -852,6 +934,7 @@
 
     const wrap = root.querySelector('.wrap');
     const $ = (sel) => root.querySelector(sel);
+    let lastUpSig = null;
 
     ui = {
       host,
@@ -893,6 +976,33 @@
           .filter(Boolean).join(' → ');
         cEl.textContent = catText || '—';
         cEl.title = catText;
+        const ups = Array.isArray(st.upcoming) ? st.upcoming : [];
+        const upSig = ups.map((u) => (u.label || '') + '|' + (u.text || '')).join('~');
+        if (upSig !== lastUpSig) {
+          lastUpSig = upSig;
+          const ol = $('[data-f="upList"]');
+          ol.textContent = '';
+          if (!ups.length) {
+            const li = document.createElement('li');
+            li.className = 'none';
+            li.textContent = st.hasVideo ? '没有更多待听条目（或未识别到目录）' : '未检测到视频';
+            ol.appendChild(li);
+          }
+          for (const u of ups) {
+            const li = document.createElement('li');
+            const b = document.createElement('b');
+            b.textContent = u.label || '';
+            const sp = document.createElement('span');
+            sp.textContent = stripLabel(u.label, u.text);
+            sp.title = u.text || '';
+            li.appendChild(b);
+            li.appendChild(sp);
+            ol.appendChild(li);
+          }
+        }
+        const upCount = st.upcomingTotal || ups.length;
+        $('[data-f="upCount"]').textContent = upCount ? upCount + ' 节' : '—';
+        $('[data-f="upCount"]').title = ups.length < upCount ? '仅列出前 ' + ups.length + ' 节' : '';
         $('[data-f="rate"]').textContent = fmtRate(st.rate || S.rate);
         $('[data-f="lessons"]').textContent = '本次 ' + lessonsDone + ' 节';
         $('.dot').classList.toggle('on', !!S.enabled);

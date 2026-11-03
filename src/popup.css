@@ -66,6 +66,19 @@ header {
 
 .hint { font-size: 10px; color: #6c7fa3; margin-top: 6px; line-height: 1.45; }
 
+.uplist {
+  list-style: none; margin: 2px 0 0; padding: 0;
+  max-height: 208px; overflow: auto;
+  font-size: 11px; line-height: 1.5;
+}
+.uplist li { display: flex; gap: 6px; padding: 3px 1px; border-top: 1px solid rgba(255, 255, 255, .045); color: #a9b8d4; }
+.uplist li:first-child { border-top: 0; color: #8fe9cd; }
+.uplist li b { flex: none; min-width: 24px; font-weight: 500; color: #6d80a2; font-variant-numeric: tabular-nums; }
+.uplist li:first-child b { color: #6fbfa6; }
+.uplist li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.label .cnt { float: right; font-size: 10px; font-weight: 400; color: #66799b; }
+.upempty { margin: 2px 0 0; }
+
 .pagemeta { margin-top: 7px; font-size: 10px; color: #6c7fa3; }
 .pagemeta > div { display: flex; gap: 5px; line-height: 1.55; }
 .pagemeta i { font-style: normal; color: #7e8fb3; flex: none; }

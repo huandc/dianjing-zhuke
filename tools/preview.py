@@ -37,6 +37,14 @@ window.chrome = {
       title: '1.1｜刑事涉案财产处置的困境及实务对策 - 点睛网',
       catalogCur: '1.1', catalogNext: '1.2',
       nextText: '1.2｜新公司法的资本充实责任圆桌谈',
+      upcoming: [
+        { label: '1.2', text: '1.2｜新公司法的资本充实责任圆桌谈' },
+        { label: '2.1', text: '2.1｜股东出资加速到期的认定' },
+        { label: '2.2', text: '2.2｜出资不实的举证责任分配' },
+        { label: '2.3', text: '2.3｜抽逃出资的刑民交叉问题' },
+        { label: '3.1', text: '3.1｜公司决议瑕疵的类型化' }
+      ],
+      upcomingTotal: 5,
       videoSrc: 'https://vod.dianjingyun.com/course/2024/1103/lesson-1.1-1080p.m3u8',
       nextIn: 0, quiz: false, lessons: 2, enabled: true, host: 'www.zfwx.com',
       msg: '锁定 1.5× · 播完自动下一节', href: 'https://www.zfwx.com/wxqt/package/course.do'
