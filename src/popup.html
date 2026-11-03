@@ -72,6 +72,8 @@
       <label class="switch sm"><input type="checkbox" id="pauseOnQuiz" /><span class="slider"></span></label></label>
     <label class="line"><span>列表页自动进课<em>听课中心点「继续学习」</em></span>
       <label class="switch sm"><input type="checkbox" id="autoList" /><span class="slider"></span></label></label>
+    <label class="line"><span>按队列连播<em>听课中心逐条播完未听课程</em></span>
+      <label class="switch sm"><input type="checkbox" id="listRun" /><span class="slider"></span></label></label>
     <label class="line"><span>显示页面悬浮面板</span>
       <label class="switch sm"><input type="checkbox" id="showPanel" /><span class="slider"></span></label></label>
   </section>
@@ -96,6 +98,11 @@
     <button class="btn" id="pickBtn">拾取「下一节」</button>
   </div>
   <div class="actions">
+    <button class="btn" id="scanBtn">扫描列表排队</button>
+    <button class="btn" id="goBtn">开始连播</button>
+  </div>
+
+  <div class="actions">
     <button class="btn ghost" id="injectBtn" hidden>在当前页启用脚本</button>
     <a class="btn ghost" href="https://www.dianjingyun.com/" target="_blank" rel="noreferrer">打开点睛网</a>
     <button class="btn ghost" id="statsBtn">今日统计</button>
@@ -106,7 +113,7 @@
 
   <footer>
     <span id="footNote">仅辅助播放，请遵守点睛网学习规则</span>
-    <span id="ver">v1.5.0</span>
+    <span id="ver">v1.6.0</span>
   </footer>
 
   <div class="toast" id="toast" hidden></div>

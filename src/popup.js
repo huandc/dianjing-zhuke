@@ -11,6 +11,7 @@ const DEFAULTS = {
   nextDelayMinMs: 4000,
   nextDelayMaxMs: 6000,
   autoList: false,
+  listRun: true,
   pauseOnQuiz: true,
   beep: true,
   showPanel: true,
@@ -91,7 +92,7 @@ async function save(patch) {
 
 function renderControls() {
   $('#enabled').checked = !!settings.enabled;
-  ['autoPlay', 'autoNext', 'autoMute', 'pauseOnQuiz', 'autoList', 'showPanel', 'forceRate']
+  ['autoPlay', 'autoNext', 'autoMute', 'pauseOnQuiz', 'autoList', 'listRun', 'showPanel', 'forceRate']
     .forEach((k) => { $('#' + k).checked = !!settings[k]; });
   const [lo, hi] = delayRange();
   $('#nextDelayMin').value = String(Math.round(lo / 100) / 10);
@@ -218,7 +219,8 @@ function renderState(rec) {
   $('#rateNow').textContent = fmtRate(st.rate || settings.rate);
   $('#lessons').textContent = String(st.lessons || 0);
 
-  if (st.quiz) setPill('等待答题', 'warn');
+  if (st.listMode) setPill(st.upcomingTotal ? '课程列表 · 待听 ' + st.upcomingTotal : '课程列表', st.upcomingTotal ? 'on' : 'warn');
+  else if (st.quiz) setPill('等待答题', 'warn');
   else if (!st.hasVideo) setPill('未检测到视频', 'warn');
   else if (st.ended) setPill('已播完', 'warn');
   else if (st.playing) setPill('播放中', 'on');
@@ -232,8 +234,11 @@ function renderState(rec) {
   $('#pgHref').title = st.href || '';
   $('#pgVideo').textContent = st.videoSrc || '—';
   $('#pgVideo').title = st.videoSrc || '';
-  const cat = [st.catalogCur && ('当前 ' + st.catalogCur), st.catalogNext && ('下一节 ' + st.catalogNext)]
+  let cat = [st.catalogCur && ('当前 ' + st.catalogCur), st.catalogNext && ('下一节 ' + st.catalogNext)]
     .filter(Boolean).join(' → ');
+  if (st.listMode) {
+    cat = '队列 ' + (st.upcomingTotal || 0) + ' 条待听 / 共 ' + (st.queueTotal || 0) + ' 条（已完成 ' + (st.queueDone || 0) + '）';
+  }
   $('#pgCatalog').textContent = cat || '—';
   $('#pgCatalog').title = cat;
 
@@ -241,6 +246,7 @@ function renderState(rec) {
 
   const parts = [];
   if (!st.enabled) parts.push('总开关已关闭');
+  else if (st.listMode && !st.queueTotal) parts.push('点「扫描列表排队」收集未听完的课程');
   else if (st.msg) parts.push(st.msg);
   if (st.nextIn > 0) parts.push(st.nextIn + ' 秒后进入下一节');
   $('#hint').textContent = parts.join(' · ') || '运行中';
@@ -266,7 +272,13 @@ async function poll() {
 async function cmd(name) {
   try {
     await chrome.runtime.sendMessage({ type: 'DJZK_CMD_REQ', cmd: name, tabId: tab && tab.id });
-    toast(name === 'next' ? '已发送「下一节」' : '请在页面上点『下一节』按钮');
+    const tip = {
+      next: '已发送「下一节」',
+      pick: '请在页面上点『下一节』按钮',
+      scan: '正在扫描课程列表，稍等…',
+      go: '已开始按队列连播'
+    };
+    toast(tip[name] || '已发送');
   } catch (e) {
     toast('当前页没有运行脚本');
   }
@@ -379,7 +391,7 @@ async function init() {
   renderControls();
 
   $('#enabled').addEventListener('change', (e) => save({ enabled: e.target.checked }));
-  ['autoPlay', 'autoNext', 'autoMute', 'pauseOnQuiz', 'autoList', 'showPanel', 'forceRate']
+  ['autoPlay', 'autoNext', 'autoMute', 'pauseOnQuiz', 'autoList', 'listRun', 'showPanel', 'forceRate']
     .forEach((k) => $('#' + k).addEventListener('change', (e) => save({ [k]: e.target.checked })));
   const onDelay = (which) => {
     const [curLo, curHi] = delayRange();
@@ -411,6 +423,8 @@ async function init() {
   $('#nextDelayMax').addEventListener('change', () => onDelay('max'));
   $('#nextBtn').addEventListener('click', () => cmd('next'));
   $('#pickBtn').addEventListener('click', () => cmd('pick'));
+  $('#scanBtn').addEventListener('click', () => cmd('scan'));
+  $('#goBtn').addEventListener('click', () => cmd('go'));
   $('#injectBtn').addEventListener('click', inject);
   $('#statsBtn').addEventListener('click', showStats);
   $('#diagBtn').addEventListener('click', () => { copyPageDiag().catch((e) => toast('出错：' + (e && e.message ? e.message : e))); });

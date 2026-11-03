@@ -20,7 +20,7 @@ window.chrome = {
     local: {
       get: async (d) => {
         const settings = { enabled: true, autoPlay: true, autoNext: true, autoMute: true, rate: 1.5,
-          forceRate: true, endThreshold: 1.5, nextDelayMinMs: 4000, nextDelayMaxMs: 6000, autoList: false, pauseOnQuiz: true,
+          forceRate: true, endThreshold: 1.5, nextDelayMinMs: 4000, nextDelayMaxMs: 6000, autoList: false, listRun: true, pauseOnQuiz: true,
           beep: true, showPanel: true, panelPos: null,
           customSelectors: [{ sel: '#nextBtn', text: '下一节', host: 'www.zfwx.com' }] };
         return { djzk_settings: settings, djzk_stats: { date: '2026-11-03', lessons: 6 } };
@@ -59,7 +59,7 @@ window.chrome = {
   storage: {
     local: {
       get: (d, cb) => cb({ djzk_settings: { enabled: true, autoPlay: true, autoNext: true, autoMute: true,
-        rate: 1.5, forceRate: true, endThreshold: 1.5, nextDelayMinMs: 4000, nextDelayMaxMs: 6000, autoList: false,
+        rate: 1.5, forceRate: true, endThreshold: 1.5, nextDelayMinMs: 4000, nextDelayMaxMs: 6000, autoList: false, listRun: true,
         pauseOnQuiz: true, beep: false, showPanel: true, panelPos: null, customSelectors: [] } }),
       set: () => {}
     },
@@ -170,7 +170,7 @@ def main():
         build_popup(work)
         build_panel(work)
         run_chrome("file://" + os.path.join(work, "popup.html"),
-                   os.path.join(DOCS, "popup.png"), "342,1000")
+                   os.path.join(DOCS, "popup.png"), "342,1180")
         run_chrome("file://" + os.path.join(work, "panel.html"),
                    os.path.join(DOCS, "panel.png"), "1160,780")
     for f in ("popup.png", "panel.png"):

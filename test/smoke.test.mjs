@@ -290,6 +290,94 @@ await sleep(30);
 rlVideo.playbackRate = 1.25;
 check('关闭强制后可自由改倍速', Math.abs(rlVideo.playbackRate - 1.25) < 0.01, String(rlVideo.playbackRate));
 
+/* ---------- [14] 课程列表页：采集未听完的项 + 队列连播 ---------- */
+console.log('\n[14] 课程列表队列');
+const listHtml = `<!doctype html><html><head><title>听课中心</title></head><body>
+  <div class="courseList">
+    <ul class="courseNav of"><li class="on">正听</li><li>未听</li></ul>
+    <div class="courseCont">
+      <div class="courseDetail courseTT of"><span class="index">序号</span><span class="className">课程名称</span></div>
+      <div class="courseDetail of" id="d1">
+        <span class="index">T1</span>
+        <span class="className classTitle isCourse" title="1段｜刑事业务公益课程"><em>1段｜刑事业务公益课程</em></span>
+        <div class="courseHid">
+          <span class="className classTitle isCourse" title="1.1｜刑事涉案财产处置"><em>1.1｜刑事涉案财产处置</em></span>
+          <div class="courseVideo vidHidden">
+            <div class="videoList of"><span class="className">问题一：财产处置的困境</span><span class="progress"><p class="progress_num"><i>100</i>%</p></span><span class="player">播放</span></div>
+            <div class="videoList of"><span class="className">问题二：涉案财物的范围</span><span class="progress"><p class="progress_num"><i>40</i>%</p></span><span class="player">播放</span></div>
+            <div class="videoList of"><span class="className">问题三：案外人异议</span><span class="progress"><p class="progress_num"><i>0</i>%</p></span><span class="player">播放</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</body></html>`;
+const listDom = new JSDOM(listHtml, { url: 'https://www.zfwx.com/wxqt/package/target/list.html', runScripts: 'outside-only', pretendToBeVisual: true });
+const lw = listDom.window;
+lw.Element.prototype.getBoundingClientRect = function () {
+  return { width: 260, height: 40, left: 0, top: 0, right: 260, bottom: 40, x: 0, y: 0 };
+};
+const lstore = {
+  djzk_settings: {
+    enabled: true, autoPlay: true, autoNext: true, autoMute: true, rate: 1.5, rateLock: true,
+    nextDelayMinMs: 200, nextDelayMaxMs: 300, autoList: false, listRun: false, pauseOnQuiz: true,
+    beep: false, showPanel: false, panelPos: null, customSelectors: []
+  }
+};
+lw.chrome = {
+  runtime: {
+    lastError: null,
+    onMessage: { addListener: () => {} },
+    sendMessage: () => {},
+    getURL: (p) => 'chrome-extension://test/' + p
+  },
+  storage: {
+    local: {
+      get: (defaults, cb) => {
+        const out = {};
+        for (const k of Object.keys(defaults)) out[k] = k in lstore ? lstore[k] : defaults[k];
+        cb(out);
+      },
+      set: (obj) => { Object.assign(lstore, obj); }
+    },
+    onChanged: { addListener: () => {} }
+  }
+};
+lw.eval(SRC);
+const LT = lw.__DJZK_TEST__;
+await sleep(350);
+
+check('识别为课程列表页', LT.isCourseListPage() === true);
+const lrows = LT.listRows();
+check('列表解析出 3 个视频行', lrows.length === 3, 'rows=' + lrows.length);
+check('进度解析正确 100/40/0', lrows.map((r) => r.pct).join(',') === '100,40,0', lrows.map((r) => r.pct).join(','));
+check('行带着所属课程标题', /1\.1｜刑事涉案财产处置/.test(lrows[1].course), lrows[1].course);
+
+const clicked = [];
+lw.document.querySelectorAll('.videoList').forEach((vl) => {
+  vl.querySelector('.player').addEventListener('click', () => clicked.push(vl.querySelector('.className').textContent));
+});
+
+const harvested = await LT.harvestQueue();
+check('采集只收进度<100 的条目', harvested.items.length === 2, 'items=' + harvested.items.length);
+check('队列写入 storage', !!lstore.djzk_queue && lstore.djzk_queue.items.length === 2);
+check('队列记录列表页地址', /target\/list\.html$/.test(lstore.djzk_queue.url), lstore.djzk_queue.url);
+check('队列首条是 40% 的问题二', /问题二/.test(harvested.items[0].title), harvested.items[0].title);
+
+const lst = LT.snapshot();
+check('快照标记为列表模式', lst.listMode === true);
+check('快照待听列表来自队列', lst.upcomingTotal === 2 && /问题二/.test(lst.upcoming[0].text), JSON.stringify(lst.upcoming && lst.upcoming[0]));
+
+const go1 = LT.queueNext();
+check('连播点了队列第一条', go1 === true && clicked.length === 1 && /问题二/.test(clicked[0]), clicked.join(' | '));
+check('当前队列项已记录', /问题二/.test(lstore.djzk_queue.curKey || ''), lstore.djzk_queue.curKey);
+
+/* 把问题二标成 100%（模拟听完回列表），下一次应跳过它点问题三 */
+const row2 = [...lw.document.querySelectorAll('.videoList')].find((el) => el.textContent.includes('问题二'));
+row2.querySelector('.progress_num').textContent = '100%';
+const go2 = LT.queueNext();
+check('已听完的条目被跳过', go2 === true && clicked.length === 2 && /问题三/.test(clicked[1]), clicked.join(' | '));
+
 const failed = results.filter((r) => !r.ok);
 console.log('\n' + (failed.length ? `❌ ${failed.length}/${results.length} 项失败` : `✅ 全部 ${results.length} 项通过`));
 process.exit(failed.length ? 1 : 0);

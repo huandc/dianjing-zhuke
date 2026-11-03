@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.5.0';
+  const VERSION = '1.6.0';
   const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
     /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
@@ -26,7 +26,8 @@
     endThreshold: 1.5,    // 距结尾多少秒算“播完”
     nextDelayMinMs: 4000, // 播完后最短等待（随机区间下限）
     nextDelayMaxMs: 6000, // 播完后最长等待（随机区间上限）
-    autoList: false,      // 课程列表页自动点“继续学习”
+    autoList: false,
+    listRun: true,      // 课程列表页自动点“继续学习”
     pauseOnQuiz: true,    // 检测到弹题时暂停并提醒
     beep: true,           // 弹题时响一声
     showPanel: true,      // 显示右下角悬浮面板
@@ -612,6 +613,7 @@
     lastNextSig = videoSig;
     const cands = collectCandidates();
     if (!cands.length) {
+      if (queuePending().length && queueGotoList()) return true;
       msg = '没找到「下一节」按钮 → 用面板上的「拾取」点一下它';
       return false;
     }
@@ -638,6 +640,7 @@
       lessonsDone += 1;
     }
     if (nextTries >= 3) {
+      if (queuePending().length && queueGotoList()) return true;
       msg = '点了 ' + nextTries + ' 次仍没换视频，请手动操作或用「拾取」重新指定';
     }
     report(true);
@@ -736,9 +739,170 @@
     return false;
   }
 
+  /* ------------------------- 课程列表页：采集队列 + 连播 ------------------------- */
+  const QUEUE_KEY = 'djzk_queue';
+  let queue = { url: '', at: 0, items: [], curKey: '' };
+  let queueLoaded = false;
+  let listPageAt = 0;
+  let lastQueueClickAt = 0;
+  let harvesting = false;
+
+  const sleepMs = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  function isCourseListPage() {
+    if (!IS_TOP) return false;
+    const box = document.querySelector('.courseList');
+    if (!box) return false;
+    return !!box.querySelector('.videoList, .courseDetail');
+  }
+
+  function loadQueue(cb) {
+    if (queueLoaded) { if (cb) cb(); return; }
+    queueLoaded = true;
+    try {
+      chrome.storage.local.get({ [QUEUE_KEY]: null }, (res) => {
+        const q = res && res[QUEUE_KEY];
+        if (q && Array.isArray(q.items)) {
+          queue = { url: q.url || '', at: q.at || 0, items: q.items, curKey: q.curKey || '' };
+        }
+        if (cb) cb();
+      });
+    } catch (e) { if (cb) cb(); }
+  }
+
+  function saveQueue(cb) {
+    try { chrome.storage.local.set({ [QUEUE_KEY]: queue }, cb || (() => {})); } catch (e) { if (cb) cb(); }
+  }
+
+  function courseTitleOf(vl) {
+    const hid = vl.closest('.courseHid');
+    const scope = hid || vl.closest('.courseDetail');
+    const el = scope && scope.querySelector('.className.classTitle');
+    return el ? norm(el.getAttribute('title') || el.textContent).slice(0, 80) : '';
+  }
+
+  /* 列表上的「问题/小节」行：.courseVideo>.videoList，含进度百分比 */
+  function listRows() {
+    const rows = [];
+    const seen = new Set();
+    for (const vl of document.querySelectorAll('.courseList .videoList')) {
+      const nameEl = vl.querySelector('.className');
+      const title = nameEl ? norm(nameEl.textContent).slice(0, 120) : '';
+      if (!title) continue;
+      const course = courseTitleOf(vl);
+      const key = course + '||' + title;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const pctEl = vl.querySelector('.progress_num');
+      let pct = parseInt(String((pctEl && pctEl.textContent) || '').replace(/[^\d]/g, ''), 10);
+      if (!isFinite(pct)) pct = 0;
+      rows.push({ el: vl, key, course, title, pct: Math.max(0, Math.min(100, pct)) });
+    }
+    return rows;
+  }
+
+  function queuePending() {
+    return (queue.items || []).filter((it) => !it.done);
+  }
+
+  /* 点击课件标题/打开套课，触发 Angular 把 video[courseId] 拉回来 */
+  async function harvestQueue() {
+    if (!isCourseListPage()) { msg = '当前不是课程列表页'; render(); return { items: [], total: 0, pending: 0 }; }
+    if (harvesting) return { items: queuePending(), total: (queue.items || []).length, pending: queuePending().length };
+    harvesting = true;
+    try {
+      loadQueue();
+      msg = '扫描列表：正在展开套课与小节…';
+      render(); report();
+      for (let round = 0; round < 4; round++) {
+        const blanks = [];
+        for (const cd of document.querySelectorAll('.courseList .courseDetail')) {
+          const own = cd.querySelector(':scope > .courseVideo');
+          if (own && !own.querySelector('.videoList')) {
+            const t = cd.querySelector(':scope > .className.classTitle');
+            if (t) blanks.push(t);
+          }
+          for (const hid of cd.querySelectorAll('.courseHid')) {
+            const cv = hid.querySelector(':scope > .courseVideo');
+            if (cv && !cv.querySelector('.videoList')) {
+              const t = hid.querySelector('.className.classTitle');
+              if (t) blanks.push(t);
+            }
+          }
+        }
+        const live = blanks.filter((el) => el.isConnected);
+        if (!live.length) break;
+        for (const el of live.slice(0, 8)) { clickEl(el); await sleepMs(500); }
+      }
+      const rows = listRows();
+      const items = rows.filter((r) => r.pct < 100)
+        .map((r) => ({ key: r.key, course: r.course, title: r.title, pct: r.pct, done: false }));
+      queue = { url: location.href, at: now(), items, curKey: queue.curKey || '' };
+      saveQueue();
+      msg = '扫描完成：本页 ' + rows.length + ' 个视频，' + items.length + ' 个未听完，已放入待听队列';
+      render(); report(true);
+      return { items, total: rows.length, pending: items.length };
+    } finally {
+      harvesting = false;
+    }
+  }
+
+  /* 点队列里的下一条：重新从 DOM 读进度，已 100% 的直接标记完成 */
+  function queueNext() {
+    const pend = queuePending();
+    if (!pend.length) return false;
+    const rows = listRows();
+    for (const it of pend) {
+      const row = rows.find((r) => r.key === it.key) || null;
+      if (row && row.pct >= 100) { it.done = true; saveQueue(); continue; }
+      if (!row) { it.done = true; msg = '队列项在当前页找不到，已跳过：' + it.title.slice(0, 20); saveQueue(); continue; }
+      const btn = row.el.querySelector('.player') || row.el.querySelector('.className');
+      if (!btn) { it.done = true; saveQueue(); continue; }
+      queue.curKey = it.key;
+      saveQueue();
+      lastQueueClickAt = now();
+      msg = '列表连播：进入「' + it.title.slice(0, 30) + '」';
+      render();
+      clickEl(btn);
+      return true;
+    }
+    return false;
+  }
+
+  /* 本课程已经在播放页听完 → 记完成，回列表播下一条 */
+  function queueGotoList() {
+    const cur = (queue.items || []).find((it) => it.key === queue.curKey);
+    if (cur && !cur.done) { cur.done = true; saveQueue(); }
+    const pend = queuePending();
+    const url = queue.url || '';
+    if (!pend.length) {
+      msg = '待听队列已全部播完 🎉';
+      render(); report(true);
+      return false;
+    }
+    if (!url) { msg = '队列里还有 ' + pend.length + ' 条，但没有列表页地址'; render(); return false; }
+    msg = '本课程已听完，回列表继续队列（剩 ' + pend.length + ' 条）…';
+    render(); report(true);
+    setTimeout(() => { location.href = url; }, 1500);
+    return true;
+  }
+
   /* ------------------------- 主循环 ------------------------- */
   function tick() {
     if (!S.enabled) { render(); report(); return; }
+
+    /* 听课中心/课程列表页：没有视频，走队列连播 */
+    if (isCourseListPage()) {
+      if (!listPageAt) listPageAt = now();
+      loadQueue();
+      const pend = queuePending();
+      if (S.listRun && pend.length && now() - listPageAt > 2500 && now() - lastQueueClickAt > 20000) {
+        queueNext();
+      }
+      render();
+      report();
+      return;
+    }
 
     const v = pickVideo();
     noteVideo(v);
@@ -789,6 +953,20 @@
     const peek = catalogPeek();
     const cur = v ? (v.currentTime || 0) : 0;
     const dur = v ? (isFinite(v.duration) ? v.duration : 0) : 0;
+    let upcoming = peek.upcoming || [];
+    let upcomingTotal = peek.upcomingTotal || 0;
+    let listMode = false;
+    let queueTotal = 0;
+    let queueDone = 0;
+    if (isCourseListPage()) {
+      loadQueue();
+      listMode = true;
+      const pend = queuePending();
+      queueTotal = (queue.items || []).length;
+      queueDone = queueTotal - pend.length;
+      upcoming = pend.slice(0, 80).map((it) => ({ label: it.course || '目录', text: it.title }));
+      upcomingTotal = pend.length;
+    }
     return {
       v: VERSION,
       top: IS_TOP,
@@ -798,9 +976,12 @@
       videoSrc: v ? String(v.currentSrc || v.src || '').slice(0, 300) : '',
       catalogCur: peek.cur,
       catalogNext: peek.next,
-      nextText: peek.nextText,
-      upcoming: peek.upcoming || [],
-      upcomingTotal: peek.upcomingTotal || 0,
+      nextText: peek.nextText || (listMode ? (upcoming[0] && upcoming[0].text) || '' : ''),
+      upcoming,
+      upcomingTotal,
+      listMode,
+      queueTotal,
+      queueDone,
       hasVideo: !!v,
       playing: !!(v && !v.paused && !v.ended),
       ended: !!(v && v.ended),
@@ -843,6 +1024,8 @@
     }
     if (cmd === 'next') doNext('面板');
     if (cmd === 'pick') startPicker();
+    if (cmd === 'scan') harvestQueue();
+    if (cmd === 'go') queueNext();
   }
 
   function saveSettings(patch) {
@@ -905,6 +1088,7 @@
         .up-list li:first-child{color:#8fe9cd}
         .up-list .none{color:#5f7091}
         .rowbtns{display:flex;gap:6px;margin-bottom:8px}
+        .rowbtns[hidden]{display:none}
         button.b{flex:1;border:1px solid rgba(120,160,255,.3);background:rgba(80,120,255,.16);color:#dce7ff;
                  border-radius:8px;padding:5px 4px;cursor:pointer;font-size:11px;font-family:inherit}
         button.b:hover{background:rgba(80,120,255,.32)}
@@ -944,6 +1128,10 @@
           <div class="rowbtns">
             <button class="b" data-act="next">立即下一节</button>
             <button class="b" data-act="pick">拾取「下一节」</button>
+          </div>
+          <div class="rowbtns" data-f="scanRow" hidden>
+            <button class="b" data-act="scan">扫描列表排队</button>
+            <button class="b" data-act="go">开始连播</button>
           </div>
           <div class="sec">
             <button class="tag" data-t="autoPlay">自动播放</button>
@@ -1032,7 +1220,11 @@
           }
         }
         const upCount = st.upcomingTotal || ups.length;
-        $('[data-f="upCount"]').textContent = upCount ? upCount + ' 节' : '—';
+        $('[data-f="upCount"]').textContent = st.listMode
+          ? (upCount ? (upCount + ' 条') : (st.queueTotal ? '0 条（共 ' + st.queueTotal + '）' : '未排队'))
+          : (upCount ? upCount + ' 节' : '—');
+        const scanRow = $('[data-f="scanRow"]');
+        if (scanRow) scanRow.hidden = !st.listMode;
         $('[data-f="upCount"]').title = ups.length < upCount ? '仅列出前 ' + ups.length + ' 节' : '';
         $('[data-f="rate"]').textContent = fmtRate(st.rate || S.rate);
         $('[data-f="lessons"]').textContent = '本次 ' + lessonsDone + ' 节';
@@ -1052,6 +1244,8 @@
         case 'hide': saveSettings({ showPanel: false }); break;
         case 'next': sendCmd('next'); ui.update(); break;
         case 'pick': sendCmd('pick'); break;
+        case 'scan': sendCmd('scan'); break;
+        case 'go': sendCmd('go'); break;
         case 'rate-': saveSettings({ rate: stepRate(S.rate, -1) }); break;
         case 'rate+': saveSettings({ rate: stepRate(S.rate, 1) }); break;
       }
@@ -1171,6 +1365,8 @@
     if (m.type === 'DJZK_CMD') {
       if (m.cmd === 'next') doNext('面板');
       else if (m.cmd === 'pick') startPicker();
+      else if (m.cmd === 'scan') harvestQueue();
+      else if (m.cmd === 'go') queueNext();
       else if (m.cmd === 'play') applyPlayback(video || pickVideo());
       if (reply) reply({ ok: true, state: snapshot() });
       return true;
@@ -1200,6 +1396,7 @@
     function boot() {
       installRateLock();
       ensurePageRateLock();
+      loadQueue();
       applyToDom();
       timer = setInterval(tick, 600);
       document.addEventListener('visibilitychange', () => setTimeout(tick, 300));
@@ -1259,6 +1456,7 @@
   window.__DJZK_TEST__ = {
     pickVideo, collectCandidates, doNext, cssPath, snapshot, delayRange: nextDelayRange,
     nearEnd, rowCollapsed, tick, clampRate,
+    isCourseListPage, listRows, harvestQueue, queueNext, queueGotoList, get queue() { return queue; },
     get settings() { return S; },
     get msg() { return msg; }
   };
