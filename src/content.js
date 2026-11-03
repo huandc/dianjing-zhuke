@@ -1,6 +1,6 @@
 /* ============================================================
  * 点睛网 · 自动刷课助手  ——  内容脚本
- * 注入到 *.zfwx.com 的所有页面与 iframe。
+ * 注入到 *.zfwx.com / *.dianjingyun.com 的所有页面与 iframe。
  * 流程：找视频 → 保活播放 → 锁定倍速 → 静音 → 播完点「下一节」
  *       → 识别弹题/弹窗 → 右下角悬浮面板 → 状态上报给后台
  * ============================================================ */
@@ -9,8 +9,9 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.1.1';
-  const HOST_OK = /(^|\.)zfwx\.com$/i.test(location.hostname) ||
+  const VERSION = '1.2.0';
+  const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
+    /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
   const IS_TOP = (() => { try { return window.top === window; } catch (e) { return false; } })();
 
@@ -255,6 +256,91 @@
     video = v;
   }
 
+  /* -------------------- 右侧目录（选课）模式 --------------------
+   * 点睛云新版播放页把「节」列在右侧目录里，条目标题形如 "1.2 | 公司法的…"。
+   * 这里按节号（major.minor）找到当前条目，点它的下一条。 */
+  const LESSON_LABEL = /^\s*(\d{1,2})\.(\d{1,2})\s*[|｜]/;
+
+  function lessonLabelOf(el) {
+    if (!el) return null;
+    const raw = el.textContent || '';
+    if (!raw || raw.length > 120) return null;
+    const m = LESSON_LABEL.exec(raw);
+    return m ? [Number(m[1]), Number(m[2])] : null;
+  }
+
+  function cmpLabel(a, b) { return (a[0] - b[0]) || (a[1] - b[1]); }
+
+  function activeLessonLabel() {
+    const sel = '[class*="active"],[class*="current"],[class*="playing"],[aria-current]';
+    for (const el of document.querySelectorAll(sel)) {
+      if (!isVisible(el)) continue;
+      /* 高亮的常常是「问题一」这类小节，往上下找它所属的 1.x 章节 */
+      let node = el;
+      for (let i = 0; node && i < 5; i++, node = node.parentElement) {
+        const l = lessonLabelOf(node);
+        if (l) return l;
+      }
+      for (const c of el.querySelectorAll('*')) {
+        const l = lessonLabelOf(c);
+        if (l) return l;
+      }
+    }
+    return null;
+  }
+
+  function pageLessonLabel() {
+    const a = activeLessonLabel();
+    if (a) return a;
+    const m = /(\d{1,2})\.(\d{1,2})\s*[|｜]/.exec(String(document.title || ''));
+    if (m) return [Number(m[1]), Number(m[2])];
+    for (const el of document.querySelectorAll('[class*="crumb"],[class*="bread"],[class*="path"],[class*="position"],[class*="nav"]')) {
+      const t = (el.textContent || '').trim();
+      if (!t || t.length > 200) continue;
+      const mm = /(\d{1,2})\.(\d{1,2})\s*[|｜]/.exec(t);
+      if (mm) return [Number(mm[1]), Number(mm[2])];
+    }
+    /* 面包屑类名不固定时，再按「含 > 或 › 的短文本」兜底扫一遍 */
+    let scanned = 0;
+    for (const el of document.querySelectorAll('div,span,p,section,nav')) {
+      const t = (el.textContent || '').trim();
+      if (!t || t.length > 200 || !/[>›»]/.test(t)) continue;
+      if (++scanned > 400) break;
+      const mm = /(\d{1,2})\.(\d{1,2})\s*[|｜]/.exec(t);
+      if (mm) return [Number(mm[1]), Number(mm[2])];
+    }
+    return null;
+  }
+
+  function catalogItems() {
+    const out = [];
+    const seen = new Set();
+    for (const el of document.querySelectorAll('li,a,div,span,p')) {
+      const l = lessonLabelOf(el);
+      if (!l || !isVisible(el)) continue;
+      let nested = false;
+      for (const c of el.children) { if (lessonLabelOf(c)) { nested = true; break; } }
+      if (nested) continue;
+      const key = l.join('.');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({ el, label: l });
+    }
+    out.sort((a, b) => cmpLabel(a.label, b.label));
+    return out;
+  }
+
+  function catalogNext() {
+    const items = catalogItems();
+    if (items.length < 2) return null;
+    const cur = pageLessonLabel();
+    if (!cur) return null;
+    const idx = items.findIndex((it) => cmpLabel(it.label, cur) === 0);
+    if (idx < 0 || idx === items.length - 1) return null;
+    const nxt = items[idx + 1];
+    return { el: nxt.el, label: nxt.label.join('.') };
+  }
+
   /* ------------------------- 下一节 ------------------------- */
   function collectCandidates() {
     const out = [];
@@ -269,6 +355,12 @@
       }
       for (const el of nodes) if (isVisible(el)) out.push({ el, pri: -10, tag: '已拾取' });
     }
+
+    /* 右侧目录模式：优先级仅次于手动拾取 */
+    try {
+      const cat = catalogNext();
+      if (cat) out.push({ el: clickableOf(cat.el) || cat.el, pri: -5, tag: '目录 ' + cat.label });
+    } catch (e) { /* ignore */ }
 
     const nodes = document.querySelectorAll('a,button,[role="button"],li,span,div,td');
     let scanned = 0;

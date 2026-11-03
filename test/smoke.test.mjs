@@ -174,6 +174,34 @@ changeListeners.forEach((f) => f({ djzk_settings: { newValue: store.djzk_setting
 rg = T.delayRange();
 check('旧版固定等待自动迁移成区间', rg[0] === 3000 && rg[1] === 5000, JSON.stringify(rg));
 
+console.log('\n[9] 右侧目录模式（点睛云新版播放页）');
+window.document.title = '1.1 | 新公司法的国有公司治理圆桌谈';
+const cat = window.document.createElement('ul');
+cat.id = 'catalog';
+cat.innerHTML = [
+  '1.1 | 新公司法的国有公司治理圆桌谈',
+  '1.2 | 新公司法的资本充实责任圆桌谈',
+  '2.1 | 公司法修订概述'
+].map((t) => '<li class="item"><span>' + t + '</span></li>').join('');
+window.document.body.appendChild(cat);
+store.djzk_settings = Object.assign({}, store.djzk_settings, { customSelectors: [] });
+changeListeners.forEach((f) => f({ djzk_settings: { newValue: store.djzk_settings } }, 'local'));
+const catClicks = [];
+cat.querySelectorAll('li').forEach((li) => li.addEventListener('click', () => catClicks.push(li.textContent.slice(0, 3))));
+const cands3 = T.collectCandidates();
+check('目录模式优先选中下一节 1.2', !!cands3[0] && cands3[0].tag === '目录 1.2', cands3[0] && cands3[0].tag);
+cands3[0].el.click();
+check('点击落在 1.2 条目上', catClicks.some((t) => t.startsWith('1.2')), catClicks.join(','));
+
+console.log('\n[10] 目录：高亮小节反推所属章节');
+window.document.title = '点睛云';
+const cat2 = window.document.createElement('ul');
+cat2.innerHTML = '<li class="chap"><span>2.1 | 公司法修订概述</span><div class="active">问题一：修订亮点</div></li>' +
+  '<li class="chap"><span>2.2 | 资本充实责任</span></li>';
+window.document.body.appendChild(cat2);
+const cands4 = T.collectCandidates();
+check('高亮小节时选中下一章 2.2', !!cands4[0] && cands4[0].tag === '目录 2.2', cands4[0] && cands4[0].tag);
+
 const failed = results.filter((r) => !r.ok);
 console.log('\n' + (failed.length ? `❌ ${failed.length}/${results.length} 项失败` : `✅ 全部 ${results.length} 项通过`));
 process.exit(failed.length ? 1 : 0);
