@@ -258,6 +258,9 @@ const shownRow = [...window.document.querySelectorAll('.rightCatalogList li')].f
 check('折叠章节里的行判定为收起', !!hiddenRow && T.rowCollapsed(hiddenRow) === true);
 check('展开章节里的行不算收起', !!shownRow && T.rowCollapsed(shownRow) === false);
 
+check('倍速上限夹到 16×', T.clampRate(20) === 16);
+check('非法倍速回落到 1.5×', T.clampRate(0) === 1.5);
+check('低速也能设 0.5×', T.clampRate(0.5) === 0.5);
 check('2× 时结尾窗口按倍速放大', T.nearEnd({ duration: 100, currentTime: 97, playbackRate: 2 }) === true);
 check('1× 且还剩 3 秒不算结尾', T.nearEnd({ duration: 100, currentTime: 97, playbackRate: 1 }) === false);
 

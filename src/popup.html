@@ -51,6 +51,10 @@
   <section class="card">
     <div class="label">倍速</div>
     <div class="rates" id="rates"></div>
+    <label class="line rcline">
+      <span>自定义倍速<em>0.5–16×，回车或失焦生效</em></span>
+      <span class="wait"><input type="number" id="rateCustom" min="0.5" max="16" step="0.25" inputmode="decimal" /><i class="u">×</i></span>
+    </label>
     <label class="line">
       <span>强制倍速<em>页面改写也压住</em></span>
       <label class="switch sm"><input type="checkbox" id="forceRate" /><span class="slider"></span></label>
@@ -102,7 +106,7 @@
 
   <footer>
     <span id="footNote">仅辅助播放，请遵守点睛网学习规则</span>
-    <span id="ver">v1.4.1</span>
+    <span id="ver">v1.5.0</span>
   </footer>
 
   <div class="toast" id="toast" hidden></div>

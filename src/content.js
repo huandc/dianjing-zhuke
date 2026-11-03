@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.4.1';
+  const VERSION = '1.5.0';
   const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
     /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
@@ -48,6 +48,12 @@
 
   /* ------------------------- 运行时状态 ------------------------- */
   /* 旧版只有固定延迟 nextDelayMs，迁移成默认 2 秒浮动区间 */
+  function clampRate(r) {
+    const n = Number(r);
+    if (!isFinite(n) || n <= 0) return 1.5;
+    return Math.min(16, Math.max(0.5, Math.round(n * 100) / 100));
+  }
+
   function mergeSettings(raw) {
     raw = raw || {};
     const out = Object.assign({}, DEFAULTS, raw);
@@ -55,6 +61,7 @@
       out.nextDelayMinMs = raw.nextDelayMs;
       out.nextDelayMaxMs = raw.nextDelayMs + 2000;
     }
+    out.rate = clampRate(out.rate);
     return out;
   }
 
@@ -840,6 +847,8 @@
 
   function saveSettings(patch) {
     S = Object.assign({}, S, patch);
+    if (patch && 'rate' in patch) S.rate = clampRate(S.rate);
+    S.forceRate = !!S.forceRate;
     applyToDom();
     if (chromep()) chrome.storage.local.set({ djzk_settings: S });
     tick();
@@ -1075,7 +1084,7 @@
     ui.update();
   }
 
-  const RATES = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+  const RATES = [1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5, 6];
   function stepRate(cur, dir) {
     let i = RATES.findIndex((r) => Math.abs(r - cur) < 0.01);
     if (i < 0) i = 2;
@@ -1249,7 +1258,7 @@
   /* 调试 / 自动化测试入口 */
   window.__DJZK_TEST__ = {
     pickVideo, collectCandidates, doNext, cssPath, snapshot, delayRange: nextDelayRange,
-    nearEnd, rowCollapsed, tick,
+    nearEnd, rowCollapsed, tick, clampRate,
     get settings() { return S; },
     get msg() { return msg; }
   };

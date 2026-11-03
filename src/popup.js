@@ -17,7 +17,7 @@ const DEFAULTS = {
   panelPos: null,
   customSelectors: []
 };
-const RATES = [1, 1.25, 1.5, 1.75, 2, 2.5, 3];
+const RATES = [1, 1.25, 1.5, 1.75, 2, 2.5, 3, 4, 5, 6];
 
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => [...document.querySelectorAll(s)];
@@ -52,6 +52,12 @@ function fmtSecText(ms) {
 }
 
 /* 与 content.js 同口径：旧版固定延迟迁移成区间 */
+function clampRate(r) {
+  const n = Number(r);
+  if (!isFinite(n) || n <= 0) return 1.5;
+  return Math.min(16, Math.max(0.5, Math.round(n * 100) / 100));
+}
+
 function mergeSettings(raw) {
   raw = raw || {};
   const out = Object.assign({}, DEFAULTS, raw);
@@ -59,6 +65,7 @@ function mergeSettings(raw) {
     out.nextDelayMinMs = raw.nextDelayMs;
     out.nextDelayMaxMs = raw.nextDelayMs + 2000;
   }
+  out.rate = clampRate(out.rate);
   return out;
 }
 
@@ -77,6 +84,7 @@ function delayRange() {
 
 async function save(patch) {
   settings = Object.assign({}, settings, patch);
+  if (patch && 'rate' in patch) settings.rate = clampRate(settings.rate);
   await chrome.storage.local.set({ djzk_settings: settings });
   renderControls();
 }
@@ -101,6 +109,8 @@ function renderControls() {
     b.addEventListener('click', () => save({ rate: r }));
     box.appendChild(b);
   }
+  const custom = $('#rateCustom');
+  if (custom && document.activeElement !== custom) custom.value = String(Math.round(settings.rate * 100) / 100);
 
   const picked = $('#picked');
   const list = settings.customSelectors || [];
@@ -386,6 +396,17 @@ async function init() {
     }
     save({ nextDelayMinMs: lo, nextDelayMaxMs: hi });
   };
+  const applyCustomRate = () => {
+    const el = $('#rateCustom');
+    const n = Number(el.value);
+    if (!isFinite(n) || n <= 0) { el.value = String(settings.rate); return; }
+    save({ rate: clampRate(n) }).then(() => { el.value = String(settings.rate); });
+  };
+  $('#rateCustom').addEventListener('change', applyCustomRate);
+  $('#rateCustom').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); applyCustomRate(); }
+  });
+
   $('#nextDelayMin').addEventListener('change', () => onDelay('min'));
   $('#nextDelayMax').addEventListener('change', () => onDelay('max'));
   $('#nextBtn').addEventListener('click', () => cmd('next'));

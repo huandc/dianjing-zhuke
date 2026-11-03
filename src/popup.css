@@ -138,13 +138,15 @@ select {
 .switch.sm input:checked + .slider::before { transform: translateX(15px); }
 
 /* ------- 倍速 ------- */
-.rates { display: flex; gap: 5px; margin-bottom: 8px; }
+.rates { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
 .rates button {
-  flex: 1; padding: 5px 0; font-size: 11px; cursor: pointer; font-family: inherit;
+  flex: 1 0 46px; padding: 5px 0; font-size: 11px; cursor: pointer; font-family: inherit;
   color: var(--dim); background: transparent;
   border: 1px solid var(--line); border-radius: 7px;
 }
 .rates button.on { color: #0d1526; background: var(--acc); border-color: transparent; font-weight: 700; }
+.rcline { margin-top: 2px; }
+.rcline .wait input { width: 62px; }
 
 /* ------- 拾取列表 ------- */
 .picked { display: flex; flex-wrap: wrap; gap: 5px; }
