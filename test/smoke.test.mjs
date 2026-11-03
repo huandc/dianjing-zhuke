@@ -57,7 +57,7 @@ v.pause = () => { vs.paused = true; };
 const store = {
   djzk_settings: {
     enabled: true, autoPlay: true, autoNext: true, autoMute: true, rate: 1.5, forceRate: true,
-    endThreshold: 1.5, nextDelayMs: 300, autoList: false, pauseOnQuiz: true, beep: false,
+    endThreshold: 1.5, nextDelayMinMs: 300, nextDelayMaxMs: 600, autoList: false, pauseOnQuiz: true, beep: false,
     showPanel: true, panelPos: null, customSelectors: []
   }
 };
@@ -124,6 +124,7 @@ $('#next').addEventListener('click', () => { nextClicks++; });
 vs.currentTime = 60;
 vs.ended = true;
 v.dispatchEvent(new window.Event('ended', { bubbles: true }));
+check('播完提示带随机区间', /随机/.test(T.msg), T.msg);
 await sleep(4200);
 check('自动点击了「下一节」', nextClicks >= 1, 'click 次数 ' + nextClicks);
 check('跳过节数 +1', T.snapshot().lessons === 1, 'lessons=' + T.snapshot().lessons);
@@ -155,6 +156,23 @@ store.djzk_settings = Object.assign({}, store.djzk_settings, {
 changeListeners.forEach((f) => f({ djzk_settings: { newValue: store.djzk_settings } }, 'local'));
 const c2 = T.collectCandidates();
 check('拾取的选择器被优先采用', c2.length > 0 && c2[0].pri === -10, c2[0] && ('tag=' + c2[0].tag));
+
+console.log('\n[8] 随机等待区间');
+check('区间取自设置 300–600ms', JSON.stringify(T.delayRange()) === '[300,600]', JSON.stringify(T.delayRange()));
+store.djzk_settings = Object.assign({}, store.djzk_settings, { nextDelayMinMs: 9000, nextDelayMaxMs: 2000 });
+changeListeners.forEach((f) => f({ djzk_settings: { newValue: store.djzk_settings } }, 'local'));
+let rg = T.delayRange();
+check('上下限反了自动交换', rg[0] === 2000 && rg[1] === 9000, JSON.stringify(rg));
+store.djzk_settings = Object.assign({}, store.djzk_settings, { nextDelayMinMs: -5, nextDelayMaxMs: 999999 });
+changeListeners.forEach((f) => f({ djzk_settings: { newValue: store.djzk_settings } }, 'local'));
+rg = T.delayRange();
+check('越界值夹到 0–180 秒', rg[0] === 0 && rg[1] === 180000, JSON.stringify(rg));
+delete store.djzk_settings.nextDelayMinMs;
+delete store.djzk_settings.nextDelayMaxMs;
+store.djzk_settings.nextDelayMs = 3000;
+changeListeners.forEach((f) => f({ djzk_settings: { newValue: store.djzk_settings } }, 'local'));
+rg = T.delayRange();
+check('旧版固定等待自动迁移成区间', rg[0] === 3000 && rg[1] === 5000, JSON.stringify(rg));
 
 const failed = results.filter((r) => !r.ok);
 console.log('\n' + (failed.length ? `❌ ${failed.length}/${results.length} 项失败` : `✅ 全部 ${results.length} 项通过`));

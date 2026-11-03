@@ -61,14 +61,14 @@
 
   <section class="card">
     <label class="line"><span>播完后等待</span>
-      <select id="nextDelayMs">
-        <option value="2000">2 秒</option>
-        <option value="4000">4 秒</option>
-        <option value="6000">6 秒</option>
-        <option value="10000">10 秒</option>
-        <option value="15000">15 秒</option>
-      </select>
+      <span class="wait">
+        <input type="number" id="nextDelayMin" min="0" max="300" step="0.5" aria-label="最短等待（秒）" />
+        <span class="dash">–</span>
+        <input type="number" id="nextDelayMax" min="0" max="300" step="0.5" aria-label="最长等待（秒）" />
+        <span class="u">秒</span>
+      </span>
     </label>
+    <div class="hint" id="waitHint">每次在区间内随机等待后再跳下一节</div>
     <div class="label">已拾取的「下一节」按钮</div>
     <div class="picked" id="picked"><span class="empty">还没有拾取</span></div>
     <div class="hint">找不到下一节？在视频页点「拾取」，然后点页面上真实的「下一节」按钮，插件会记住它。</div>
@@ -86,7 +86,7 @@
 
   <footer>
     <span id="footNote">仅辅助播放，请遵守点睛网学习规则</span>
-    <span id="ver">v1.0.0</span>
+    <span id="ver">v1.1.0</span>
   </footer>
 
   <div class="toast" id="toast" hidden></div>

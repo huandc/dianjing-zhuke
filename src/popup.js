@@ -8,7 +8,8 @@ const DEFAULTS = {
   rate: 1.5,
   forceRate: false,
   endThreshold: 1.5,
-  nextDelayMs: 4000,
+  nextDelayMinMs: 4000,
+  nextDelayMaxMs: 6000,
   autoList: false,
   pauseOnQuiz: true,
   beep: true,
@@ -46,6 +47,34 @@ function toast(text) {
   toast._t = setTimeout(() => { t.hidden = true; }, 1800);
 }
 
+function fmtSecText(ms) {
+  return String(Math.round(ms / 100) / 10).replace(/\.0$/, '');
+}
+
+/* 与 content.js 同口径：旧版固定延迟迁移成区间 */
+function mergeSettings(raw) {
+  raw = raw || {};
+  const out = Object.assign({}, DEFAULTS, raw);
+  if (raw.nextDelayMinMs == null && raw.nextDelayMaxMs == null && typeof raw.nextDelayMs === 'number') {
+    out.nextDelayMinMs = raw.nextDelayMs;
+    out.nextDelayMaxMs = raw.nextDelayMs + 2000;
+  }
+  return out;
+}
+
+/* 兼容旧版固定值 nextDelayMs */
+function delayRange() {
+  let lo = Number(settings.nextDelayMinMs);
+  let hi = Number(settings.nextDelayMaxMs);
+  if (!isFinite(lo)) lo = Number(settings.nextDelayMs);
+  if (!isFinite(lo)) lo = 4000;
+  if (!isFinite(hi)) hi = lo + 2000;
+  lo = Math.min(Math.max(lo, 0), 300000);
+  hi = Math.min(Math.max(hi, 0), 300000);
+  if (hi < lo) { const t = lo; lo = hi; hi = t; }
+  return [lo, hi];
+}
+
 async function save(patch) {
   settings = Object.assign({}, settings, patch);
   await chrome.storage.local.set({ djzk_settings: settings });
@@ -56,14 +85,12 @@ function renderControls() {
   $('#enabled').checked = !!settings.enabled;
   ['autoPlay', 'autoNext', 'autoMute', 'pauseOnQuiz', 'autoList', 'showPanel', 'forceRate']
     .forEach((k) => { $('#' + k).checked = !!settings[k]; });
-  $('#nextDelayMs').value = String(settings.nextDelayMs || 4000);
-  if (!$('#nextDelayMs').value) {
-    const opt = document.createElement('option');
-    opt.value = String(settings.nextDelayMs);
-    opt.textContent = Math.round(settings.nextDelayMs / 1000) + ' 秒';
-    $('#nextDelayMs').appendChild(opt);
-    $('#nextDelayMs').value = opt.value;
-  }
+  const [lo, hi] = delayRange();
+  $('#nextDelayMin').value = String(Math.round(lo / 100) / 10);
+  $('#nextDelayMax').value = String(Math.round(hi / 100) / 10);
+  $('#waitHint').textContent = lo === hi
+    ? '播完后等 ' + fmtSecText(lo) + ' 秒进入下一节'
+    : '每次在 ' + fmtSecText(lo) + '–' + fmtSecText(hi) + ' 秒之间随机等待后进入下一节';
 
   const box = $('#rates');
   box.innerHTML = '';
@@ -206,13 +233,29 @@ async function showStats() {
 async function init() {
   tab = await activeTab();
   const res = await chrome.storage.local.get({ djzk_settings: DEFAULTS });
-  settings = Object.assign({}, DEFAULTS, res.djzk_settings || {});
+  settings = mergeSettings(res.djzk_settings);
   renderControls();
 
   $('#enabled').addEventListener('change', (e) => save({ enabled: e.target.checked }));
   ['autoPlay', 'autoNext', 'autoMute', 'pauseOnQuiz', 'autoList', 'showPanel', 'forceRate']
     .forEach((k) => $('#' + k).addEventListener('change', (e) => save({ [k]: e.target.checked })));
-  $('#nextDelayMs').addEventListener('change', (e) => save({ nextDelayMs: Number(e.target.value) }));
+  const onDelay = (which) => {
+    const [curLo, curHi] = delayRange();
+    const read = (id, fallback) => {
+      const raw = $('#' + id).value.trim();
+      const v = Number(raw);
+      return raw === '' || !isFinite(v) ? fallback : Math.min(Math.max(v, 0), 300) * 1000;
+    };
+    let lo = read('nextDelayMin', curLo);
+    let hi = read('nextDelayMax', curHi);
+    if (lo > hi) {
+      if (which === 'min') hi = lo;
+      else lo = hi;
+    }
+    save({ nextDelayMinMs: lo, nextDelayMaxMs: hi });
+  };
+  $('#nextDelayMin').addEventListener('change', () => onDelay('min'));
+  $('#nextDelayMax').addEventListener('change', () => onDelay('max'));
   $('#nextBtn').addEventListener('click', () => cmd('next'));
   $('#pickBtn').addEventListener('click', () => cmd('pick'));
   $('#injectBtn').addEventListener('click', inject);
@@ -220,7 +263,7 @@ async function init() {
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.djzk_settings) {
-      settings = Object.assign({}, DEFAULTS, changes.djzk_settings.newValue || {});
+      settings = mergeSettings(changes.djzk_settings.newValue);
       renderControls();
     }
   });

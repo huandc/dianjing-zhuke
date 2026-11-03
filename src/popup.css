@@ -66,6 +66,20 @@ header {
 
 .hint { font-size: 10px; color: #6c7fa3; margin-top: 6px; line-height: 1.45; }
 
+/* ------- 随机等待 ------- */
+.line .wait { display: flex; flex-direction: row; align-items: center; gap: 5px; }
+#waitHint { margin: 2px 0 9px; }
+.wait input {
+  width: 52px; padding: 4px 5px; text-align: center;
+  background: rgba(255, 255, 255, .05); border: 1px solid var(--line);
+  border-radius: 7px; color: var(--txt); font: inherit;
+  font-variant-numeric: tabular-nums; outline: none; -moz-appearance: textfield;
+}
+.wait input:focus { border-color: var(--acc); background: rgba(126, 224, 192, .08); }
+.wait input::-webkit-outer-spin-button, .wait input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.wait .u { font-size: 11px; color: var(--dim); }
+.wait .dash { font-size: 11px; color: #5f7091; }
+
 /* ------- 行 ------- */
 .line {
   display: flex; align-items: center; justify-content: space-between;

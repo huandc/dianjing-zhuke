@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.0.0';
+  const VERSION = '1.1.0';
   const HOST_OK = /(^|\.)zfwx\.com$/i.test(location.hostname) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
   const IS_TOP = (() => { try { return window.top === window; } catch (e) { return false; } })();
@@ -23,7 +23,8 @@
     rate: 1.5,            // 倍速
     forceRate: false,     // 锁定倍速（播放器重置也拉不回来）
     endThreshold: 1.5,    // 距结尾多少秒算“播完”
-    nextDelayMs: 4000,    // 播完后延迟多少毫秒再去点下一节
+    nextDelayMinMs: 4000, // 播完后最短等待（随机区间下限）
+    nextDelayMaxMs: 6000, // 播完后最长等待（随机区间上限）
     autoList: false,      // 课程列表页自动点“继续学习”
     pauseOnQuiz: true,    // 检测到弹题时暂停并提醒
     beep: true,           // 弹题时响一声
@@ -45,6 +46,17 @@
   ].join(',');
 
   /* ------------------------- 运行时状态 ------------------------- */
+  /* 旧版只有固定延迟 nextDelayMs，迁移成默认 2 秒浮动区间 */
+  function mergeSettings(raw) {
+    raw = raw || {};
+    const out = Object.assign({}, DEFAULTS, raw);
+    if (raw.nextDelayMinMs == null && raw.nextDelayMaxMs == null && typeof raw.nextDelayMs === 'number') {
+      out.nextDelayMinMs = raw.nextDelayMs;
+      out.nextDelayMaxMs = raw.nextDelayMs + 2000;
+    }
+    return out;
+  }
+
   let S = Object.assign({}, DEFAULTS);
   let video = null;
   let videoSig = '';
@@ -299,10 +311,31 @@
     return true;
   }
 
+  function fmtSec(ms) {
+    const s = Math.round(ms / 100) / 10;
+    return String(s).replace(/\.0$/, '');
+  }
+
+  /* 播完后等待区间（毫秒），兼容旧版固定值 nextDelayMs */
+  function nextDelayRange() {
+    let lo = Number(S.nextDelayMinMs);
+    let hi = Number(S.nextDelayMaxMs);
+    if (!isFinite(lo)) lo = Number(S.nextDelayMs);
+    if (!isFinite(lo)) lo = 4000;
+    if (!isFinite(hi)) hi = lo + 2000;
+    lo = Math.min(Math.max(lo, 0), 180000);
+    hi = Math.min(Math.max(hi, 0), 180000);
+    if (hi < lo) { const t = lo; lo = hi; hi = t; }
+    return [lo, hi];
+  }
+
   function scheduleNext() {
     if (nextAt) return;
-    nextAt = now() + Math.max(500, S.nextDelayMs) + Math.random() * 1500;
-    msg = '本节已播完，' + Math.round((nextAt - now()) / 1000) + ' 秒后进入下一节';
+    const [lo, hi] = nextDelayRange();
+    const wait = lo + (hi > lo ? Math.random() * (hi - lo) : 0);
+    nextAt = now() + wait;
+    const span = lo === hi ? fmtSec(lo) + ' 秒' : fmtSec(lo) + '–' + fmtSec(hi) + ' 秒随机';
+    msg = '本节已播完，' + Math.max(0, Math.round(wait / 1000)) + ' 秒后进入下一节（' + span + '）';
   }
 
   /* ------------------------- 弹窗 / 弹题 ------------------------- */
@@ -740,12 +773,12 @@
     if (!HOST_OK) return;
     if (chromep()) {
       chrome.storage.local.get({ djzk_settings: DEFAULTS }, (res) => {
-        S = Object.assign({}, DEFAULTS, res.djzk_settings || {});
+        S = mergeSettings(res.djzk_settings);
         boot();
       });
       chrome.storage.onChanged.addListener((changes, area) => {
         if (area === 'local' && changes.djzk_settings) {
-          S = Object.assign({}, DEFAULTS, changes.djzk_settings.newValue || {});
+          S = mergeSettings(changes.djzk_settings.newValue);
           applyToDom();
           render();
         }
@@ -813,7 +846,7 @@
 
   /* 调试 / 自动化测试入口 */
   window.__DJZK_TEST__ = {
-    pickVideo, collectCandidates, doNext, cssPath, snapshot,
+    pickVideo, collectCandidates, doNext, cssPath, snapshot, delayRange: nextDelayRange,
     get settings() { return S; },
     get msg() { return msg; }
   };
