@@ -202,6 +202,31 @@ window.document.body.appendChild(cat2);
 const cands4 = T.collectCandidates();
 check('高亮小节时选中下一章 2.2', !!cands4[0] && cands4[0].tag === '目录 2.2', cands4[0] && cands4[0].tag);
 
+console.log('\n[11] 点睛网真实目录结构（.play_playerMLBox）');
+const box = window.document.createElement('div');
+box.className = 'play_playerMLBox';
+box.innerHTML = [
+  '<div class="courseItem playIngCourse">',
+  '  <h3 class="courseName on"><span><em></em><a href="javascript:void(0)">1.1｜刑事涉案财产处置的困境及实务对策</a></span><i></i></h3>',
+  '  <div class="animateH"><ul class="rightCatalogList">',
+  '    <li class="hasBuy on" data-status="bofang"><p class="name cw" data-id="56899">1.1｜刑事涉案财产处置的困境及实务对策<em>105.1分钟/2.33课时</em></p></li>',
+  '  </ul></div>',
+  '</div>',
+  '<div class="courseItem">',
+  '  <h3 class="courseName"><span><em></em><a href="javascript:void(0)">1.2｜刑事涉案财产的证明标准</a></span><i></i></h3>',
+  '  <div class="animateH"><ul class="rightCatalogList">',
+  '    <li class="hasBuy"><p class="name cw" data-id="56900">1.2｜刑事涉案财产的证明标准<em>30分钟/0.67课时</em></p></li>',
+  '  </ul></div>',
+  '</div>'
+].join('');
+window.document.body.appendChild(box);
+const zfClicks = [];
+box.querySelectorAll('li').forEach((li) => li.addEventListener('click', () => zfClicks.push(li.textContent.slice(0, 3))));
+const cands5 = T.collectCandidates();
+check('真实目录结构选中下一节 1.2', !!cands5[0] && cands5[0].tag === '目录 1.2', cands5[0] && cands5[0].tag);
+cands5[0].el.click();
+check('点击落在 1.2 的条目上', zfClicks.some((t) => t.startsWith('1.2')), zfClicks.join(','));
+
 const failed = results.filter((r) => !r.ok);
 console.log('\n' + (failed.length ? `❌ ${failed.length}/${results.length} 项失败` : `✅ 全部 ${results.length} 项通过`));
 process.exit(failed.length ? 1 : 0);

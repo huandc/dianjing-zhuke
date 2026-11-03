@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.2.1';
+  const VERSION = '1.2.2';
   const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
     /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
@@ -256,6 +256,55 @@
     video = v;
   }
 
+  /* --------- 点睛网播放页右侧目录（真实页面结构） ---------
+   * .play_playerMLBox
+   *   .courseItem(.playIngCourse)
+   *     h3.courseName(.on) > span > a            ← 章节标题，形如「1.1｜…」
+   *     .animateH > ul.rightCatalogList
+   *       li.hasBuy(.on, data-status="bofang")   ← 小节，点它切视频
+   *         p.name.cw[data-id]                   ← 真正绑事件的行
+   */
+  function zfwxCatalogNext() {
+    const box = document.querySelector('.play_playerMLBox');
+    if (!box) return null;
+    const onCls = (el) => /(^|\s)on(\s|$)/.test(String((el && el.className) || ''));
+    const labelOfRow = (el) => {
+      const m = LESSON_LABEL.exec(String((el && el.textContent) || ''));
+      return m ? m[1] + '.' + m[2] : '';
+    };
+    const headOf = (item) => (item && (item.querySelector('h3.courseName a') || item.querySelector('h3.courseName'))) || null;
+    const rows = [...box.querySelectorAll('.rightCatalogList li')];
+
+    let cur = rows.findIndex((li) => onCls(li) || li.getAttribute('data-status') === 'bofang');
+    if (cur < 0) {
+      const label = pageLessonLabel();
+      if (label) cur = rows.findIndex((li) => { const l = lessonLabelOf(li); return l && cmpLabel(l, label) === 0; });
+    }
+    if (cur < 0) return null;
+
+    /* 同一章内还有下一条小节 */
+    if (cur < rows.length - 1) {
+      const next = rows[cur + 1];
+      const label = labelOfRow(next);
+      if (isVisible(next)) {
+        const row = next.querySelector('p.name') || next.querySelector('a') || next;
+        return { el: row, label: label || labelOfRow(row) };
+      }
+      const head = headOf(next.closest('.courseItem'));
+      if (head) return { el: head, label: label };
+    }
+
+    /* 本章最后一条：点下一个 courseItem 的标题 */
+    const items = [...box.querySelectorAll('.courseItem')];
+    const ci = items.findIndex((el) => el.contains(rows[cur]));
+    if (ci >= 0 && ci < items.length - 1) {
+      const nx = items[ci + 1];
+      const head = headOf(nx);
+      if (head) return { el: head, label: labelOfRow(nx.querySelector('h3.courseName') || nx) };
+    }
+    return null;
+  }
+
   /* -------------------- 右侧目录（选课）模式 --------------------
    * 点睛云新版播放页把「节」列在右侧目录里，条目标题形如 "1.2 | 公司法的…"。
    * 这里按节号（major.minor）找到当前条目，点它的下一条。 */
@@ -356,7 +405,13 @@
       for (const el of nodes) if (isVisible(el)) out.push({ el, pri: -10, tag: '已拾取' });
     }
 
-    /* 右侧目录模式：优先级仅次于手动拾取 */
+    /* 点睛网播放页的右侧目录（真实结构），优先级仅次于手动拾取 */
+    try {
+      const zf = zfwxCatalogNext();
+      if (zf && zf.el) out.push({ el: zf.el, pri: -6, tag: '目录 ' + (zf.label || '下一节') });
+    } catch (e) { /* ignore */ }
+
+    /* 其他站点的通用目录模式 */
     try {
       const cat = catalogNext();
       if (cat) out.push({ el: clickableOf(cat.el) || cat.el, pri: -5, tag: '目录 ' + cat.label });
