@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <link rel="stylesheet" href="popup.css" />
+  <title>点睛网自动刷课</title>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <img src="../icons/icon48.png" alt="" width="26" height="26" />
+      <div>
+        <div class="name">点睛助手</div>
+        <div class="sub">自动播放 · 自动下一节</div>
+      </div>
+    </div>
+    <label class="switch" title="总开关">
+      <input type="checkbox" id="enabled" />
+      <span class="slider"></span>
+    </label>
+  </header>
+
+  <section class="card status" id="statusCard">
+    <div class="statusline">
+      <span class="pill" id="statePill">未知</span>
+      <span class="host" id="host">—</span>
+    </div>
+    <div class="progress"><i id="bar"></i></div>
+    <div class="metrics">
+      <div><b id="pct">0%</b><span>进度</span></div>
+      <div><b id="time">00:00</b><span>已看 / 总长</span></div>
+      <div><b id="rateNow">1.5×</b><span>倍速</span></div>
+      <div><b id="lessons">0</b><span>本次跳过</span></div>
+    </div>
+    <div class="hint" id="hint">正在读取页面状态…</div>
+  </section>
+
+  <section class="card">
+    <div class="label">倍速</div>
+    <div class="rates" id="rates"></div>
+    <label class="line">
+      <span>锁定倍速<em>播放器重置也拉回</em></span>
+      <label class="switch sm"><input type="checkbox" id="forceRate" /><span class="slider"></span></label>
+    </label>
+  </section>
+
+  <section class="card">
+    <label class="line"><span>自动播放 / 续播</span>
+      <label class="switch sm"><input type="checkbox" id="autoPlay" /><span class="slider"></span></label></label>
+    <label class="line"><span>播完自动下一节</span>
+      <label class="switch sm"><input type="checkbox" id="autoNext" /><span class="slider"></span></label></label>
+    <label class="line"><span>自动静音</span>
+      <label class="switch sm"><input type="checkbox" id="autoMute" /><span class="slider"></span></label></label>
+    <label class="line"><span>弹题时暂停并提醒</span>
+      <label class="switch sm"><input type="checkbox" id="pauseOnQuiz" /><span class="slider"></span></label></label>
+    <label class="line"><span>列表页自动进课<em>听课中心点「继续学习」</em></span>
+      <label class="switch sm"><input type="checkbox" id="autoList" /><span class="slider"></span></label></label>
+    <label class="line"><span>显示页面悬浮面板</span>
+      <label class="switch sm"><input type="checkbox" id="showPanel" /><span class="slider"></span></label></label>
+  </section>
+
+  <section class="card">
+    <label class="line"><span>播完后等待</span>
+      <select id="nextDelayMs">
+        <option value="2000">2 秒</option>
+        <option value="4000">4 秒</option>
+        <option value="6000">6 秒</option>
+        <option value="10000">10 秒</option>
+        <option value="15000">15 秒</option>
+      </select>
+    </label>
+    <div class="label">已拾取的「下一节」按钮</div>
+    <div class="picked" id="picked"><span class="empty">还没有拾取</span></div>
+    <div class="hint">找不到下一节？在视频页点「拾取」，然后点页面上真实的「下一节」按钮，插件会记住它。</div>
+  </section>
+
+  <div class="actions">
+    <button class="btn primary" id="nextBtn">立即下一节</button>
+    <button class="btn" id="pickBtn">拾取「下一节」</button>
+  </div>
+  <div class="actions">
+    <button class="btn ghost" id="injectBtn" hidden>在当前页启用脚本</button>
+    <a class="btn ghost" href="https://www.zfwx.com/" target="_blank" rel="noreferrer">打开点睛网</a>
+    <button class="btn ghost" id="statsBtn">今日统计</button>
+  </div>
+
+  <footer>
+    <span id="footNote">仅辅助播放，请遵守点睛网学习规则</span>
+    <span id="ver">v1.0.0</span>
+  </footer>
+
+  <div class="toast" id="toast" hidden></div>
+  <script src="popup.js"></script>
+</body>
+</html>

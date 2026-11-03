@@ -1,0 +1,26 @@
+name: test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-audit --no-fund
+      - name: 语法检查
+        run: |
+          node --check src/content.js
+          node --check src/background.js
+          node --check src/popup.js
+          node -e "JSON.parse(require('fs').readFileSync('manifest.json'));console.log('manifest ok')"
+      - name: 后台逻辑测试
+        run: node test/background.test.mjs
+      - name: 内容脚本冒烟测试
+        run: JSDOM_PATH="$GITHUB_WORKSPACE/node_modules/jsdom" node test/smoke.test.mjs

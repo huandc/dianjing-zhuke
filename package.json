@@ -1,0 +1,14 @@
+{
+  "name": "dianjing-zhuke",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Chrome 扩展：点睛网（zfwx.com）自动播放、自动下一节、倍速与静音",
+  "scripts": {
+    "test": "node test/background.test.mjs && node test/smoke.test.mjs",
+    "preview": "python3 tools/preview.py",
+    "icons": "python3 tools/make_icons.py"
+  },
+  "devDependencies": {
+    "jsdom": "^24.1.3"
+  }
+}
