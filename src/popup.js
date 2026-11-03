@@ -230,6 +230,79 @@ async function showStats() {
   toast('今日已自动跳过 ' + n + ' 节');
 }
 
+/* 在页面 MAIN world 里跑，采集右侧目录与高亮项（函数体必须自包含） */
+function collectPageDiag() {
+  const norm = (s) => String(s || '').replace(/\s+/g, ' ').trim();
+  const labelOf = (el) => {
+    const t = norm(el.textContent || '');
+    const m = /^(\d{1,2}\.\d{1,2})\s*[|｜]/.exec(t);
+    return m ? m[1] : '';
+  };
+  const desc = (el) => ({
+    tag: el.tagName.toLowerCase(),
+    cls: String(el.className || '').slice(0, 120),
+    text: norm(el.textContent || '').slice(0, 80)
+  });
+  const html = (el) => String(el.outerHTML || '').replace(/\s+/g, ' ').slice(0, 280);
+
+  const catalog = [];
+  const seen = new Set();
+  for (const el of document.querySelectorAll('li,a,div,span,p,dt,dd,h3,h4')) {
+    const l = labelOf(el);
+    if (!l || seen.has(l)) continue;
+    let nested = false;
+    for (const c of el.children) { if (labelOf(c)) { nested = true; break; } }
+    if (nested) continue;
+    seen.add(l);
+    const r = el.getBoundingClientRect();
+    catalog.push(Object.assign({ label: l, html: html(el), rect: [Math.round(r.left), Math.round(r.top), Math.round(r.width), Math.round(r.height)] }, desc(el)));
+    if (catalog.length >= 12) break;
+  }
+
+  const active = [];
+  for (const el of document.querySelectorAll('[class*="active"],[class*="current"],[class*="playing"],[aria-current]')) {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height) continue;
+    active.push(Object.assign({ html: html(el) }, desc(el)));
+    if (active.length >= 8) break;
+  }
+
+  const v = document.querySelector('video');
+  return {
+    url: location.href,
+    title: document.title,
+    video: v ? { src: String(v.currentSrc || v.src || '').slice(0, 160), dur: v.duration } : null,
+    catalog,
+    active
+  };
+}
+
+async function copyPageDiag() {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (!tab || tab.id == null) { toast('没有活动标签页'); return; }
+  let data = null;
+  try {
+    const res = await chrome.scripting.executeScript({ target: { tabId: tab.id }, world: 'MAIN', func: collectPageDiag });
+    data = res && res[0] && res[0].result;
+  } catch (e) {
+    toast('读取失败：' + (e && e.message ? e.message : e));
+    return;
+  }
+  if (!data) { toast('没读到页面信息（可能是 chrome:// 页面）'); return; }
+  const text = JSON.stringify(data, null, 2);
+  try {
+    await navigator.clipboard.writeText(text);
+    toast('页面结构已复制，直接粘贴给对方即可');
+  } catch (e) {
+    const box = $('#diagText');
+    box.hidden = false;
+    box.value = text;
+    box.focus();
+    box.select();
+    toast('已填入下方文本框，Cmd/Ctrl+C 复制');
+  }
+}
+
 async function init() {
   tab = await activeTab();
   const res = await chrome.storage.local.get({ djzk_settings: DEFAULTS });
@@ -260,6 +333,7 @@ async function init() {
   $('#pickBtn').addEventListener('click', () => cmd('pick'));
   $('#injectBtn').addEventListener('click', inject);
   $('#statsBtn').addEventListener('click', showStats);
+  $('#diagBtn').addEventListener('click', () => { copyPageDiag().catch((e) => toast('出错：' + (e && e.message ? e.message : e))); });
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.djzk_settings) {

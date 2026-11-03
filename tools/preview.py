@@ -158,7 +158,7 @@ def main():
         build_popup(work)
         build_panel(work)
         run_chrome("file://" + os.path.join(work, "popup.html"),
-                   os.path.join(DOCS, "popup.png"), "342,760")
+                   os.path.join(DOCS, "popup.png"), "342,1000")
         run_chrome("file://" + os.path.join(work, "panel.html"),
                    os.path.join(DOCS, "panel.png"), "1160,780")
     for f in ("popup.png", "panel.png"):
