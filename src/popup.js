@@ -151,7 +151,7 @@ function renderState(rec) {
     $('#time').textContent = '00:00';
     $('#rateNow').textContent = fmtRate(settings.rate);
     $('#lessons').textContent = '0';
-    ['pgTitle', 'pgHref', 'pgCatalog'].forEach((id) => { const el = $('#' + id); el.textContent = '—'; el.title = ''; });
+    ['pgTitle', 'pgNext', 'pgCatalog', 'pgVideo', 'pgHref'].forEach((id) => { const el = $('#' + id); el.textContent = '—'; el.title = ''; });
     $('#hint').textContent = tab && /^chrome-extension:/.test(tab.url)
       ? '这是设置页，打开点睛网听课页面即可看到实时状态。'
       : '当前页面没有运行脚本（可能不在点睛网，或需要刷新页面）。';
@@ -173,8 +173,12 @@ function renderState(rec) {
 
   $('#pgTitle').textContent = st.title || '—';
   $('#pgTitle').title = st.title || '';
+  $('#pgNext').textContent = st.nextText || '—';
+  $('#pgNext').title = st.nextText || '';
   $('#pgHref').textContent = st.href || '—';
   $('#pgHref').title = st.href || '';
+  $('#pgVideo').textContent = st.videoSrc || '—';
+  $('#pgVideo').title = st.videoSrc || '';
   const cat = [st.catalogCur && ('当前 ' + st.catalogCur), st.catalogNext && ('下一节 ' + st.catalogNext)]
     .filter(Boolean).join(' → ');
   $('#pgCatalog').textContent = cat || '—';

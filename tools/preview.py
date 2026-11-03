@@ -36,6 +36,8 @@ window.chrome = {
       hasVideo: true, playing: true, rate: 1.5, cur: 1873, dur: 2710, pct: 69,
       title: '1.1｜刑事涉案财产处置的困境及实务对策 - 点睛网',
       catalogCur: '1.1', catalogNext: '1.2',
+      nextText: '1.2｜新公司法的资本充实责任圆桌谈',
+      videoSrc: 'https://vod.dianjingyun.com/course/2024/1103/lesson-1.1-1080p.m3u8',
       nextIn: 0, quiz: false, lessons: 2, enabled: true, host: 'www.zfwx.com',
       msg: '锁定 1.5× · 播完自动下一节', href: 'https://www.zfwx.com/wxqt/package/course.do'
     }, videoFrameId: 0 } })

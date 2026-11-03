@@ -248,6 +248,8 @@ check('二级点击目标是小节行', !!(cands6[0] && cands6[0].then && cands6
 const st5 = T.snapshot();
 check('快照带页面标题', st5.title === window.document.title, st5.title);
 check('快照带目录当前/下一节', st5.catalogCur === '2.1' && st5.catalogNext === '2.2', st5.catalogCur + '→' + st5.catalogNext);
+check('快照带待听内容', /2\.2/.test(String(st5.nextText)), st5.nextText);
+check('快照带视频源', /a\.mp4/.test(String(st5.videoSrc)), st5.videoSrc);
 
 const failed = results.filter((r) => !r.ok);
 console.log('\n' + (failed.length ? `❌ ${failed.length}/${results.length} 项失败` : `✅ 全部 ${results.length} 项通过`));

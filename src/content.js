@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.2.3';
+  const VERSION = '1.2.4';
   const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
     /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
@@ -287,11 +287,11 @@
       const label = labelOfRow(next);
       if (isVisible(next)) {
         const row = next.querySelector('p.name') || next.querySelector('a') || next;
-        return { el: row, label: label || labelOfRow(row), cur: curLabel };
+        return { el: row, label: label || labelOfRow(row), cur: curLabel, text: textShort(row) };
       }
       const item = next.closest('.courseItem');
       const head = headOf(item);
-      if (head) return { el: head, label: label, cur: curLabel, then: () => firstRowOf(item) };
+      if (head) return { el: head, label: label, cur: curLabel, then: () => firstRowOf(item), text: textShort(head) };
     }
 
     /* 本章最后一条：点下一个 courseItem 的标题 */
@@ -303,8 +303,8 @@
       const label = labelOfRow(nx.querySelector('h3.courseName') || nx);
       if (head) {
         const row = firstRowOf(nx);
-        if (row && isVisible(row)) return { el: row, label: label, cur: curLabel };
-        return { el: head, label: label, cur: curLabel, then: () => firstRowOf(nx) };
+        if (row && isVisible(row)) return { el: row, label: label, cur: curLabel, text: textShort(row) };
+        return { el: head, label: label, cur: curLabel, then: () => firstRowOf(nx), text: textShort(head) };
       }
     }
 
@@ -327,6 +327,10 @@
   }
 
   function cmpLabel(a, b) { return (a[0] - b[0]) || (a[1] - b[1]); }
+
+  function textShort(el, n) {
+    return norm((el && (el.innerText || el.textContent)) || '').slice(0, n || 120);
+  }
 
   function lessonLabelText(el) {
     const m = LESSON_LABEL.exec(String((el && el.textContent) || ''));
@@ -400,7 +404,7 @@
     const idx = items.findIndex((it) => cmpLabel(it.label, cur) === 0);
     if (idx < 0 || idx === items.length - 1) return null;
     const nxt = items[idx + 1];
-    return { el: nxt.el, label: nxt.label.join('.'), cur: items[idx].label.join('.') };
+    return { el: nxt.el, label: nxt.label.join('.'), cur: items[idx].label.join('.'), text: textShort(nxt.el) };
   }
 
   /* 目录是懒加载时，滚到底触发加载 */
@@ -428,12 +432,12 @@
         const zf = zfwxCatalogNext();
         const rows = [...box.querySelectorAll('.rightCatalogList li')];
         const cur = rows.find((li) => /(^|\s)on(\s|$)/.test(String(li.className || '')) || li.getAttribute('data-status') === 'bofang');
-        return { cur: cur ? lessonLabelText(cur) : '', next: (zf && zf.label) || '' };
+        return { cur: cur ? lessonLabelText(cur) : '', next: (zf && zf.label) || '', nextText: (zf && zf.text) || '' };
       }
       const g = catalogNext();
-      return { cur: (pageLessonLabel() || []).join('.'), next: (g && g.label) || '' };
+      return { cur: (pageLessonLabel() || []).join('.'), next: (g && g.label) || '', nextText: (g && g.text) || '' };
     } catch (e) {
-      return { cur: '', next: '' };
+      return { cur: '', next: '', nextText: '' };
     }
   }
 
@@ -666,8 +670,10 @@
       href: location.href,
       host: location.hostname,
       title: String(document.title || '').slice(0, 140),
+      videoSrc: v ? String(v.currentSrc || v.src || '').slice(0, 300) : '',
       catalogCur: peek.cur,
       catalogNext: peek.next,
+      nextText: peek.nextText,
       hasVideo: !!v,
       playing: !!(v && !v.paused && !v.ended),
       ended: !!(v && v.ended),
@@ -788,8 +794,10 @@
           <div class="msg" data-f="msg">初始化…</div>
           <div class="meta">
             <div class="mrow"><i>标题</i><span data-f="title">—</span></div>
-            <div class="mrow"><i>地址</i><span data-f="href">—</span></div>
+            <div class="mrow"><i>待听</i><span data-f="nextText">—</span></div>
             <div class="mrow"><i>目录</i><span data-f="catalog">—</span></div>
+            <div class="mrow"><i>视频</i><span data-f="videoSrc">—</span></div>
+            <div class="mrow"><i>地址</i><span data-f="href">—</span></div>
           </div>
           <div class="rowbtns">
             <button class="b" data-act="next">立即下一节</button>
@@ -845,6 +853,12 @@
         const hEl = $('[data-f="href"]');
         hEl.textContent = st.href || '—';
         hEl.title = st.href || '';
+        const nEl = $('[data-f="nextText"]');
+        nEl.textContent = st.nextText || '—';
+        nEl.title = st.nextText || '';
+        const vEl = $('[data-f="videoSrc"]');
+        vEl.textContent = st.videoSrc || '—';
+        vEl.title = st.videoSrc || '';
         const cEl = $('[data-f="catalog"]');
         const catText = [st.catalogCur && ('当前 ' + st.catalogCur), st.catalogNext && ('下一节 ' + st.catalogNext)]
           .filter(Boolean).join(' → ');
