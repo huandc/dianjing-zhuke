@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.8.0';
+  const VERSION = '1.8.1';
   const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
     /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
@@ -959,17 +959,26 @@
       clickEl(t);
       await sleepMs(1200);
     }
-    let items = courseRowsIn(box);
-    if (!items.length) {
+    const all = courseRowsIn(box);
+    if (!all.length) {
       msg = '这门课下面没读到小节，试试先展开再点「选择课程」';
       render();
       return null;
     }
-    queue = { url: location.href, at: now(), items, curKey: '', course: name };
+    /* 已经听完（进度 100%）的不放进队列 */
+    const items = all.filter((it) => it.pct < 100);
+    const already = all.length - items.length;
+    if (!items.length) {
+      queue = { url: location.href, at: now(), items: [], curKey: '', course: name, lastAt: 0 };
+      saveQueue();
+      msg = '「' + name.slice(0, 24) + '」的 ' + all.length + ' 节都已经听完了，没有要播的';
+      render(); report(true);
+      return [];
+    }
+    queue = { url: location.href, at: now(), items, curKey: '', course: name, lastAt: 0 };
     saveQueue();
-    const already = items.filter((it) => it.pct >= 100).length;
-    msg = '已选「' + name.slice(0, 24) + '」：共 ' + items.length + ' 节' +
-      (already ? '（其中 ' + already + ' 节已听完会跳过）' : '') + '，开始播放…';
+    msg = '已选「' + name.slice(0, 24) + '」：' + items.length + ' 节待听' +
+      (already ? '（另有 ' + already + ' 节已听完，未放进队列）' : '') + '，开始播放…';
     render(); report(true);
     setTimeout(() => { queueNext(); }, 900);
     return items;

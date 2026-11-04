@@ -427,6 +427,18 @@ say(false);
 tw.open('https://www.zfwx.com/wxqt/package/course.do?id=8');
 check('关掉开关后恢复原样', origOpenCalls === 2, 'orig=' + origOpenCalls);
 
+/* 已听完（100%）的条目不该进队列 */
+const lv2 = lw.document.querySelectorAll('.videoList')[1];
+lv2.querySelector('.progress_num').textContent = '100%';
+LT.startCoursePicker();
+lw.document.querySelector('.courseDetail .classTitle')
+  .dispatchEvent(new lw.MouseEvent('click', { bubbles: true, cancelable: true }));
+await sleep(600);
+const picked2 = lstore.djzk_queue;
+check('已听完的课程不进队列', picked2.items.length === 2 && !picked2.items.some((it) => /问题二/.test(it.title)),
+  picked2.items.map((it) => it.title).join(' | '));
+check('提示里说明有几节已听完', /未放进队列/.test(LT.snapshot().msg), LT.snapshot().msg);
+
 const failed = results.filter((r) => !r.ok);
 console.log('\n' + (failed.length ? `❌ ${failed.length}/${results.length} 项失败` : `✅ 全部 ${results.length} 项通过`));
 process.exit(failed.length ? 1 : 0);
