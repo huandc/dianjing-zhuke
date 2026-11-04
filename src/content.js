@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.7.0';
+  const VERSION = '1.7.1';
   const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
     /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
@@ -741,8 +741,10 @@
 
   /* ------------------------- 课程列表页：采集队列 + 连播 ------------------------- */
   const QUEUE_KEY = 'djzk_queue';
-  let queue = { url: '', at: 0, items: [], curKey: '' };
+  let queue = { url: '', at: 0, items: [], curKey: '', course: '', lastAt: 0 };
   let queueLoaded = false;
+  let pageAt = 0;            // 本页面加载时间（防止「打开就回列表」的死循环）
+  let lastSelfSaveAt = 0;    // 自己刚写过队列（忽略随之而来的 onChanged）
   let listPageAt = 0;
   let lastQueueClickAt = 0;
   let harvesting = false;
@@ -754,7 +756,14 @@
     if (!IS_TOP) return false;
     const box = document.querySelector('.courseList');
     if (!box) return false;
-    return !!box.querySelector('.videoList, .courseDetail');
+    if (!box.querySelector('.videoList, .courseDetail')) return false;
+    /* 页面里已经有课程视频在放（列表页被播放器覆盖、或同页弹层播放）就别再点「播放」了 */
+    const v = pickVideo();
+    if (v) {
+      const dur = isFinite(v.duration) ? v.duration : 0;
+      if (dur > 60 || (!v.paused && (v.currentTime || 0) > 1)) return false;
+    }
+    return true;
   }
 
   function loadQueue(cb) {
@@ -764,7 +773,7 @@
       chrome.storage.local.get({ [QUEUE_KEY]: null }, (res) => {
         const q = res && res[QUEUE_KEY];
         if (q && Array.isArray(q.items)) {
-          queue = { url: q.url || '', at: q.at || 0, items: q.items, curKey: q.curKey || '', course: q.course || '' };
+          queue = { url: q.url || '', at: q.at || 0, items: q.items, curKey: q.curKey || '', course: q.course || '', lastAt: q.lastAt || 0 };
         }
         if (cb) cb();
       });
@@ -772,6 +781,7 @@
   }
 
   function saveQueue(cb) {
+    lastSelfSaveAt = now();
     try { chrome.storage.local.set({ [QUEUE_KEY]: queue }, cb || (() => {})); } catch (e) { if (cb) cb(); }
   }
 
@@ -873,9 +883,27 @@
         const row = rows.find((r) => r.key === it.key) || null;
         if (row && row.pct >= 100) { it.done = true; saveQueue(); continue; }
         if (!row) { it.done = true; msg = '队列项在当前页找不到，已跳过：' + it.title.slice(0, 20); saveQueue(); continue; }
+        /* 刚点过同一条（可能已在另一个标签页/窗口播放），10 分钟内不再开一次 */
+        if (it.key === queue.curKey && queue.lastAt && now() - queue.lastAt < 600000) {
+          const min = Math.ceil((600000 - (now() - queue.lastAt)) / 60000);
+          msg = '「' + it.title.slice(0, 22) + '」已打开，等它播完（' + min + ' 分钟后才允许重试）';
+          render();
+          return false;
+        }
+        /* 同一条反复打不开就别死循环 */
+        if ((it.tries || 0) >= 2) {
+          it.done = true;
+          it.failed = true;
+          saveQueue();
+          msg = '「' + it.title.slice(0, 22) + '」试了 2 次没播起来，已跳过';
+          continue;
+        }
         const btn = row.el.querySelector('.player') || row.el.querySelector('.className');
         if (!btn) { it.done = true; saveQueue(); continue; }
+        it.tries = (it.tries || 0) + 1;
+        it.lastAt = now();
         queue.curKey = it.key;
+        queue.lastAt = now();
         saveQueue();
         lastQueueClickAt = now();
         msg = '列表连播：进入「' + it.title.slice(0, 30) + '」';
@@ -971,6 +999,11 @@
 
   /* 本课程已经在播放页听完 → 记完成，回列表播下一条 */
   function queueGotoList() {
+    /* 刚打开页面就回列表 = 死循环，先确认真的播过一段 */
+    if (now() - pageAt < 15000) {
+      msg = '刚打开播放页，先等视频播放结束（不急着回列表）';
+      return false;
+    }
     const cur = (queue.items || []).find((it) => it.key === queue.curKey);
     if (cur && !cur.done) { cur.done = true; saveQueue(); }
     const pend = queuePending();
@@ -1487,6 +1520,15 @@
         boot();
       });
       chrome.storage.onChanged.addListener((changes, area) => {
+        if (area === 'local' && changes[QUEUE_KEY] && changes[QUEUE_KEY].newValue && now() - lastSelfSaveAt > 800) {
+          const q = changes[QUEUE_KEY].newValue;
+          if (q && Array.isArray(q.items)) {
+            /* 别的标签页（播放页）写了进度，本地队列跟着更新，避免重复点同一条 */
+            queue = { url: q.url || '', at: q.at || 0, items: q.items, curKey: q.curKey || '', course: q.course || '', lastAt: q.lastAt || 0 };
+            queueLoaded = true;
+            render();
+          }
+        }
         if (area === 'local' && changes.djzk_settings) {
           S = mergeSettings(changes.djzk_settings.newValue);
           applyToDom();
@@ -1498,6 +1540,7 @@
     }
 
     function boot() {
+      pageAt = now();
       installRateLock();
       ensurePageRateLock();
       loadQueue();
@@ -1561,6 +1604,8 @@
     pickVideo, collectCandidates, doNext, cssPath, snapshot, delayRange: nextDelayRange,
     nearEnd, rowCollapsed, tick, clampRate,
     isCourseListPage, listRows, harvestQueue, queueNext, queueGotoList, startCoursePicker, playCourse,
+    getQueue: () => queue,
+    setQueue: (q) => { queue = q; queueLoaded = true; },
     courseRowsIn, get queue() { return queue; },
     get settings() { return S; },
     get msg() { return msg; }

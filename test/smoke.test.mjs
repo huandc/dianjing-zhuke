@@ -378,6 +378,19 @@ row2.querySelector('.progress_num').textContent = '100%';
 const go2 = await LT.queueNext();
 check('已听完的条目被跳过', go2 === true && clicked.length === 2 && /问题三/.test(clicked[1]), clicked.join(' | '));
 
+/* 防死循环：同一条刚点过不重复打开；反复失败 3 次跳过 */
+const go3 = await LT.queueNext();
+check('同一条刚打开过不重复点击', go3 === false && clicked.length === 2, 'clicked=' + clicked.length);
+const lq = LT.getQueue();
+lq.items.forEach((it) => { if (/问题三/.test(it.title)) it.tries = 2; });
+lq.curKey = '';
+lq.lastAt = 0;
+LT.setQueue(lq);
+await LT.queueNext();
+const lq2 = LT.getQueue();
+const q3 = lq2.items.find((it) => /问题三/.test(it.title));
+check('反复打不开的条目已被跳过', !!q3 && q3.done === true && q3.tries >= 2, JSON.stringify(q3 && { done: q3.done, tries: q3.tries }));
+
 /* 选择课程：点课程名 → 只收该课程的视频 → 从第一节开始播 */
 lw.document.querySelectorAll('.videoList').forEach((vl) => {
   vl.querySelector('.progress_num').textContent = '0%';
