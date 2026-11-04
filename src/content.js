@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.8.2';
+  const VERSION = '1.8.3';
   const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
     /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
@@ -257,9 +257,33 @@
     } catch (e) { /* ignore */ }
   }
 
+  /* 站点有自己的倍速菜单（.rate-components/.current-rate）：把我们真正在用的倍速写回去，
+     免得播放器 UI 显示 1.0x、实际却是 2.5x，看着像「倍速没生效」 */
+  function syncRateUi(rate) {
+    const r = Number(rate);
+    if (!isFinite(r) || r <= 0) return;
+    const want = (Math.round(r * 100) / 100).toFixed(1);
+    const box = document.querySelector('.rate-components') || document;
+    const cur = box.querySelector('.current-rate');
+    if (!cur) return;
+    const shown = String(cur.textContent || '').trim().replace(/[xX×：:\s]+$/g, '');
+    if (shown !== want) {
+      cur.textContent = want;
+      cur.setAttribute('data-djzk-rate', want);
+    }
+    const list = box.querySelector('.rate-list');
+    if (!list) return;
+    const target = list.querySelector('li[data-rate="' + want + '"]');
+    if (target && !target.classList.contains('current')) {
+      list.querySelectorAll('li.current').forEach((li) => li.classList.remove('current'));
+      target.classList.add('current');
+    }
+  }
+
   function applyPlayback(v) {
     if (!v) return;
     syncRateLock(v);
+    syncRateUi(isFinite(v.playbackRate) && v.playbackRate > 0 ? v.playbackRate : S.rate);
     if (S.autoMute) {
       if (!v.muted) {
         prevVolume = v.volume || 1;
@@ -1642,6 +1666,7 @@
     nearEnd, rowCollapsed, tick, clampRate,
     isCourseListPage, listRows, harvestQueue, queueNext, queueGotoList, startCoursePicker, playCourse,
     syncSameTab,
+    syncRateUi,
     getQueue: () => queue,
     setQueue: (q) => { queue = q; queueLoaded = true; },
     courseRowsIn, get queue() { return queue; },

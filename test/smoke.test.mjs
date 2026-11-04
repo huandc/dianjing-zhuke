@@ -447,6 +447,45 @@ check('已听完的课程不进队列', picked2.items.length === 2 && !picked2.i
   picked2.items.map((it) => it.title).join(' | '));
 check('提示里说明有几节已听完', /未放进队列/.test(LT.snapshot().msg), LT.snapshot().msg);
 
+/* ---------- [16] 把倍速写回站点自己的倍速菜单 ---------- */
+console.log('\n[16] 站点倍速菜单同步');
+const rateHtml = `<!doctype html><html><body>
+  <div class="playbox"><video id="v" src="https://cdn.example.com/a.mp4"></video></div>
+  <div class="rate-components">
+    <div class="current-rate">1.0</div>
+    <ul class="rate-list" style="display:none">
+      <li data-rate="2.0">2.0x</li><li data-rate="1.5">1.5x</li><li data-rate="1.0" class="current">1.0x</li>
+    </ul>
+  </div>
+</body></html>`;
+const rateDom = new JSDOM(rateHtml, { url: 'https://www.zfwx.com/wxqt/package/course.do', runScripts: 'outside-only', pretendToBeVisual: true });
+const rw = rateDom.window;
+rw.Element.prototype.getBoundingClientRect = () => ({ width: 400, height: 200, left: 0, top: 0, right: 400, bottom: 200, x: 0, y: 0 });
+const rv = rw.document.querySelector('video');
+rv.play = () => Promise.resolve();
+rv.pause = () => {};
+Object.defineProperty(rv, 'duration', { value: 600, configurable: true });
+let rtime = 0;
+Object.defineProperty(rv, 'currentTime', { get: () => rtime, set: (x) => { rtime = x; }, configurable: true });
+rw.chrome = {
+  runtime: { lastError: null, onMessage: { addListener: () => {} }, sendMessage: () => {}, getURL: (p) => 'chrome-extension://t/' + p },
+  storage: {
+    local: { get: (d, cb) => { const o = {}; for (const k of Object.keys(d)) o[k] = d[k]; cb(o); }, set: () => {} },
+    onChanged: { addListener: () => {} }
+  }
+};
+rw.eval(SRC);
+const RT = rw.__DJZK_TEST__;
+RT.syncRateUi(2);
+check('current-rate 写成 2.0', rw.document.querySelector('.current-rate').textContent === '2.0',
+  rw.document.querySelector('.current-rate').textContent);
+check('对应档位标为 current', rw.document.querySelector('li[data-rate="2.0"]').classList.contains('current'));
+RT.syncRateUi(1.5);
+check('切到 1.5 时 current 跟着换', rw.document.querySelector('li[data-rate="1.5"]').classList.contains('current') &&
+  !rw.document.querySelector('li[data-rate="2.0"]').classList.contains('current'));
+check('列表里没有的倍速仍显示真值', (RT.syncRateUi(3.25), rw.document.querySelector('.current-rate').textContent === '3.3'),
+  rw.document.querySelector('.current-rate').textContent);
+
 const failed = results.filter((r) => !r.ok);
 console.log('\n' + (failed.length ? `❌ ${failed.length}/${results.length} 项失败` : `✅ 全部 ${results.length} 项通过`));
 process.exit(failed.length ? 1 : 0);
