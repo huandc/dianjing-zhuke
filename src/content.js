@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.8.1';
+  const VERSION = '1.8.2';
   const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
     /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
@@ -29,6 +29,7 @@
     autoList: false,
     listRun: true,      // 课程列表页按队列连播
     sameTab: true,      // 连播时把「播放」的新标签改成当前标签打开
+    queueStrict: true,  // 严格按队列播放：播完就回列表，不按页面目录跳
     pauseOnQuiz: true,    // 检测到弹题时暂停并提醒
     beep: true,           // 弹题时响一声
     showPanel: true,      // 显示右下角悬浮面板
@@ -612,6 +613,16 @@
     if (now() - lastClickAt < 2500) return false;
     lastClickAt = now();
     lastNextSig = videoSig;
+    /* 这一节已经播完 → 立刻把队列里对应的条目记为完成，避免回列表后又从这一条开始 */
+    const curItem = queue.curKey ? (queue.items || []).find((it) => it.key === queue.curKey) : null;
+    if (reason === '播完' && curItem && !curItem.done) { curItem.done = true; saveQueue(); }
+    /* 严格按队列：播完这一条就回列表取下一条，不按播放页的目录乱跳 */
+    if (reason === '播完' && curItem && S.queueStrict !== false) {
+      if (queueGotoList()) return true;
+      msg = '这一节听完了，正在等列表页接管下一条…';
+      report(true);
+      return false;
+    }
     const cands = collectCandidates();
     if (!cands.length) {
       if (queuePending().length && queueGotoList()) return true;
@@ -885,8 +896,8 @@
         if (row && row.pct >= 100) { it.done = true; saveQueue(); continue; }
         if (!row) { it.done = true; msg = '队列项在当前页找不到，已跳过：' + it.title.slice(0, 20); saveQueue(); continue; }
         /* 刚点过同一条（可能已在另一个标签页/窗口播放），10 分钟内不再开一次 */
-        if (it.key === queue.curKey && queue.lastAt && now() - queue.lastAt < 600000) {
-          const min = Math.ceil((600000 - (now() - queue.lastAt)) / 60000);
+        if (it.key === queue.curKey && queue.lastAt && now() - queue.lastAt < 180000) {
+          const min = Math.ceil((180000 - (now() - queue.lastAt)) / 60000);
           msg = '「' + it.title.slice(0, 22) + '」已打开，等它播完（' + min + ' 分钟后才允许重试）';
           render();
           return false;
@@ -1138,6 +1149,7 @@
       listMode,
       queueTotal,
       queueDone,
+      queueCur: ((queue.items || []).find((it) => it.key === queue.curKey) || {}).title || '',
       hasVideo: !!v,
       playing: !!(v && !v.paused && !v.ended),
       ended: !!(v && v.ended),
@@ -1379,11 +1391,13 @@
         }
         const upCount = st.upcomingTotal || ups.length;
         $('[data-f="upCount"]').textContent = st.listMode
-          ? (upCount ? (upCount + ' 条') : (st.queueTotal ? '0 条（共 ' + st.queueTotal + '）' : '未排队'))
+          ? (st.queueTotal ? ('剩 ' + upCount + ' / 共 ' + st.queueTotal) : '未排队')
           : (upCount ? upCount + ' 节' : '—');
         const scanRow = $('[data-f="scanRow"]');
         if (scanRow) scanRow.hidden = !st.listMode;
-        $('[data-f="upCount"]').title = ups.length < upCount ? '仅列出前 ' + ups.length + ' 节' : '';
+        $('[data-f="upCount"]').title = st.queueCur
+          ? '正在处理：' + st.queueCur
+          : (ups.length < upCount ? '仅列出前 ' + ups.length + ' 节' : '');
         $('[data-f="rate"]').textContent = fmtRate(st.rate || S.rate);
         $('[data-f="lessons"]').textContent = '本次 ' + lessonsDone + ' 节';
         $('.dot').classList.toggle('on', !!S.enabled);

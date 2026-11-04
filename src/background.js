@@ -16,6 +16,7 @@ const DEFAULTS = {
   autoList: false,
   listRun: true,
   sameTab: true,
+  queueStrict: true,
   pauseOnQuiz: true,
   beep: true,
   showPanel: true,

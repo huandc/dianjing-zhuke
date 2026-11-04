@@ -378,6 +378,14 @@ row2.querySelector('.progress_num').textContent = '100%';
 const go2 = await LT.queueNext();
 check('已听完的条目被跳过', go2 === true && clicked.length === 2 && /问题三/.test(clicked[1]), clicked.join(' | '));
 
+/* 严格按队列：播完当前这条就记录完成，不再按页面目录乱跳 */
+await sleep(2600);
+LT.doNext('播完');
+await sleep(80);
+const lqDone = LT.getQueue().items.find((it) => /问题三/.test(it.title));
+check('播完即把当前条目标记完成', !!lqDone && lqDone.done === true, JSON.stringify(lqDone && lqDone.done));
+check('严格队列不点页面目录', clicked.length === 2, 'clicked=' + clicked.length);
+
 /* 防死循环：同一条刚点过不重复打开；反复失败 3 次跳过 */
 const go3 = await LT.queueNext();
 check('同一条刚打开过不重复点击', go3 === false && clicked.length === 2, 'clicked=' + clicked.length);
