@@ -9,7 +9,7 @@
   if (window.__DJZK_LOADED__) return;
   window.__DJZK_LOADED__ = true;
 
-  const VERSION = '1.7.1';
+  const VERSION = '1.8.0';
   const HOST_OK = (/(^|\.)zfwx\.com$/i.test(location.hostname) ||
     /(^|\.)dianjingyun\.com$/i.test(location.hostname)) ||
     location.hostname === 'localhost' || window.__DJZK_FORCE__ === true;
@@ -27,7 +27,8 @@
     nextDelayMinMs: 4000, // 播完后最短等待（随机区间下限）
     nextDelayMaxMs: 6000, // 播完后最长等待（随机区间上限）
     autoList: false,
-    listRun: true,      // 课程列表页自动点“继续学习”
+    listRun: true,      // 课程列表页按队列连播
+    sameTab: true,      // 连播时把「播放」的新标签改成当前标签打开
     pauseOnQuiz: true,    // 检测到弹题时暂停并提醒
     beep: true,           // 弹题时响一声
     showPanel: true,      // 显示右下角悬浮面板
@@ -906,6 +907,7 @@
         queue.lastAt = now();
         saveQueue();
         lastQueueClickAt = now();
+        syncSameTab(true);
         msg = '列表连播：进入「' + it.title.slice(0, 30) + '」';
         render();
         clickEl(btn);
@@ -915,6 +917,17 @@
     } finally {
       queueBusy = false;
     }
+  }
+
+  /* 列表页连播时，让页面世界把「播放」的新标签改成当前标签（避免堆标签页） */
+  let sameTabOn = null;
+  function syncSameTab(force) {
+    try {
+      const want = !!(S.sameTab !== false && S.listRun && isCourseListPage() && queuePending().length);
+      if (!force && want === sameTabOn) return;
+      sameTabOn = want;
+      window.postMessage({ __djzk_same_tab: 1, on: want }, '*');
+    } catch (e) { /* ignore */ }
   }
 
   /* ------------------------- 选中一门课，播它下面的所有小节 ------------------------- */
@@ -1029,6 +1042,7 @@
       if (!listPageAt) listPageAt = now();
       loadQueue();
       const pend = queuePending();
+      syncSameTab();
       if (S.listRun && pend.length && now() - listPageAt > 2500 && now() - lastQueueClickAt > 20000) {
         queueNext();
       }
@@ -1604,6 +1618,7 @@
     pickVideo, collectCandidates, doNext, cssPath, snapshot, delayRange: nextDelayRange,
     nearEnd, rowCollapsed, tick, clampRate,
     isCourseListPage, listRows, harvestQueue, queueNext, queueGotoList, startCoursePicker, playCourse,
+    syncSameTab,
     getQueue: () => queue,
     setQueue: (q) => { queue = q; queueLoaded = true; },
     courseRowsIn, get queue() { return queue; },

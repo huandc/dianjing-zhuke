@@ -405,6 +405,28 @@ check('该课程下的视频全收：3 节', !!picked && picked.items.length ===
 check('选中后开始播放第一节', /问题一/.test(picked.curKey || ''), picked && picked.curKey);
 check('总览里的待听换成该课程', LT.snapshot().upcomingTotal === 3, String(LT.snapshot().upcomingTotal));
 
+/* ---------- [15] 页面世界脚本：把播放弹出的新标签改成当前标签 ---------- */
+console.log('\n[15] 播放不新开标签');
+const tabScript = fs.readFileSync(path.join(ROOT, 'src/same-tab.js'), 'utf8');
+const tabDom = new JSDOM('<!doctype html><html><body></body></html>', {
+  url: 'https://www.zfwx.com/wxqt/package/target/list.html', runScripts: 'outside-only', pretendToBeVisual: true,
+  virtualConsole: new (require('jsdom').VirtualConsole)()
+});
+const tw = tabDom.window;
+let origOpenCalls = 0;
+tw.open = function () { origOpenCalls += 1; return { focus() {} }; };
+tw.eval(tabScript);
+const say = (on) => tw.dispatchEvent(new tw.MessageEvent('message', { data: { __djzk_same_tab: 1, on } }));
+say(true);
+const w1 = tw.open('https://www.zfwx.com/wxqt/package/course.do?id=7');
+check('开关打开后 window.open 被接管', origOpenCalls === 0, 'orig=' + origOpenCalls);
+check('返回的假窗口可 focus/close', !!w1 && typeof w1.focus === 'function' && w1.closed === false);
+tw.open('https://other.example.com/pay');
+check('跨站弹窗仍然放行', origOpenCalls === 1, 'orig=' + origOpenCalls);
+say(false);
+tw.open('https://www.zfwx.com/wxqt/package/course.do?id=8');
+check('关掉开关后恢复原样', origOpenCalls === 2, 'orig=' + origOpenCalls);
+
 const failed = results.filter((r) => !r.ok);
 console.log('\n' + (failed.length ? `❌ ${failed.length}/${results.length} 项失败` : `✅ 全部 ${results.length} 项通过`));
 process.exit(failed.length ? 1 : 0);

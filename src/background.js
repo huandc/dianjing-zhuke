@@ -15,6 +15,7 @@ const DEFAULTS = {
   nextDelayMaxMs: 6000,
   autoList: false,
   listRun: true,
+  sameTab: true,
   pauseOnQuiz: true,
   beep: true,
   showPanel: true,

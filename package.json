@@ -1,6 +1,6 @@
 {
   "name": "dianjing-zhuke",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "private": true,
   "description": "Chrome 扩展：点睛网（zfwx.com）自动播放、自动下一节、倍速与静音",
   "scripts": {

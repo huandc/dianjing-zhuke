@@ -12,6 +12,7 @@ const DEFAULTS = {
   nextDelayMaxMs: 6000,
   autoList: false,
   listRun: true,
+  sameTab: true,
   pauseOnQuiz: true,
   beep: true,
   showPanel: true,
@@ -92,7 +93,7 @@ async function save(patch) {
 
 function renderControls() {
   $('#enabled').checked = !!settings.enabled;
-  ['autoPlay', 'autoNext', 'autoMute', 'pauseOnQuiz', 'autoList', 'listRun', 'showPanel', 'forceRate']
+  ['autoPlay', 'autoNext', 'autoMute', 'pauseOnQuiz', 'autoList', 'listRun', 'sameTab', 'showPanel', 'forceRate']
     .forEach((k) => { $('#' + k).checked = !!settings[k]; });
   const [lo, hi] = delayRange();
   $('#nextDelayMin').value = String(Math.round(lo / 100) / 10);
@@ -391,7 +392,7 @@ async function init() {
   renderControls();
 
   $('#enabled').addEventListener('change', (e) => save({ enabled: e.target.checked }));
-  ['autoPlay', 'autoNext', 'autoMute', 'pauseOnQuiz', 'autoList', 'listRun', 'showPanel', 'forceRate']
+  ['autoPlay', 'autoNext', 'autoMute', 'pauseOnQuiz', 'autoList', 'listRun', 'sameTab', 'showPanel', 'forceRate']
     .forEach((k) => $('#' + k).addEventListener('change', (e) => save({ [k]: e.target.checked })));
   const onDelay = (which) => {
     const [curLo, curHi] = delayRange();

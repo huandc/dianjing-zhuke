@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "点睛网 · 自动刷课助手",
-  "version": "1.7.1",
+  "version": "1.8.0",
   "description": "自动播放/续播点睛网课程视频，播完自动进入下一节，强制倍速、静音与弹题暂停提醒。",
   "minimum_chrome_version": "111",
   "permissions": [
@@ -42,6 +42,20 @@
       ],
       "run_at": "document_start",
       "all_frames": true,
+      "world": "MAIN",
+      "match_origin_as_fallback": true
+    },
+    {
+      "matches": [
+        "*://*.zfwx.com/*",
+        "*://zfwx.com/*",
+        "*://*.dianjingyun.com/*"
+      ],
+      "js": [
+        "src/same-tab.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false,
       "world": "MAIN",
       "match_origin_as_fallback": true
     },
